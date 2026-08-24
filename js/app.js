@@ -1,18 +1,18 @@
 /**
  * ==================================================================
- * 🏫 메인 애플리케이션 프론트엔드 로직 (js/app.js)
+ * 🏫 프론트엔드 메인 애플리케이션 모듈 (js/app.js)
  * ==================================================================
  */
 
 const AppState = {
   activeTab: "classes",
-  activeSubjectFilter: "ALL",
-  activeBoardCategory: "ALL",
-  searchQuery: "",
   classes: [],
   notices: [],
   board: [],
   config: {},
+  activeSubjectFilter: "ALL",
+  activeBoardCategory: "ALL",
+  searchQuery: "",
   myApplications: [],
   currentCheckUser: { name: "", phone: "" }
 };
@@ -22,35 +22,57 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function initApp() {
-  renderSubjectFilters();
-  renderBoardCategoryFilters();
-  await loadInitialData();
+  try {
+    checkAdminAuthState();
+    await loadInitialData();
+    renderSubjectFilters();
+    renderBoardCategoryFilters();
+    navigateTab(AppState.activeTab);
+  } catch (err) {
+    showToast("초기 데이터를 불러오는데 실패하였습니다.", "error");
+    console.error(err);
+  }
 }
 
 async function loadInitialData() {
   try {
-    showLoadingSkeletons();
     const data = await API.get("getInitialData");
-    
     AppState.classes = data.classes || [];
     AppState.notices = data.notices || [];
-    AppState.board = data.board || [];
     AppState.config = data.config || {};
 
     if (AppState.config.EVENT_TITLE) {
-      document.title = AppState.config.EVENT_TITLE;
-      const headerTitleEl = document.getElementById("headerTitle");
-      if (headerTitleEl) headerTitleEl.textContent = AppState.config.EVENT_TITLE;
+      const headerTitle = document.getElementById("headerTitle");
+      if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
     }
 
-    updateHeroStats();
+    updateHeaderStats();
     renderClasses();
-    renderNotices();
-    renderBoard();
   } catch (err) {
-    console.error("초기 데이터 로딩 오류:", err);
-    showToast(`데이터 로딩 실패: ${err.message}`, "error");
+    console.error("초기 데이터 로드 에러:", err);
   }
+}
+
+function updateHeaderStats() {
+  const classes = AppState.classes || [];
+  const statTotalClasses = document.getElementById("statTotalClasses");
+  const statTotalApplicants = document.getElementById("statTotalApplicants");
+  const statAvailableClasses = document.getElementById("statAvailableClasses");
+
+  if (statTotalClasses) statTotalClasses.textContent = classes.length;
+
+  let totalApps = 0;
+  let availableCount = 0;
+
+  classes.forEach(c => {
+    totalApps += (c.currentApplied || 0);
+    if (!c.isFull && c.status !== "CLOSED" && !c.isDeadlinePassed) {
+      availableCount++;
+    }
+  });
+
+  if (statTotalApplicants) statTotalApplicants.textContent = totalApps;
+  if (statAvailableClasses) statAvailableClasses.textContent = availableCount;
 }
 
 function navigateTab(tabName) {
@@ -58,70 +80,62 @@ function navigateTab(tabName) {
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.remove("bg-indigo-800", "text-white");
-    btn.classList.add("text-indigo-200");
+    btn.classList.add("text-indigo-200", "hover:bg-indigo-800", "hover:text-white");
   });
 
   const activeBtn = document.getElementById(`tabBtn-${tabName}`);
   if (activeBtn) {
-    activeBtn.classList.remove("text-indigo-200");
+    activeBtn.classList.remove("text-indigo-200", "hover:bg-indigo-800", "hover:text-white");
     activeBtn.classList.add("bg-indigo-800", "text-white");
   }
 
-  document.querySelectorAll(".tab-content").forEach(sec => sec.classList.add("hidden"));
-  const activeSec = document.getElementById(`view-${tabName}`);
-  if (activeSec) {
-    activeSec.classList.remove("hidden");
-    activeSec.classList.add("animate-fadeIn");
+  document.querySelectorAll(".tab-content").forEach(section => {
+    section.classList.add("hidden");
+  });
+
+  const activeSection = document.getElementById(`view-${tabName}`);
+  if (activeSection) {
+    activeSection.classList.remove("hidden");
   }
 
   const heroBanner = document.getElementById("heroBanner");
   if (heroBanner) {
-    if (tabName === "classes") heroBanner.classList.remove("hidden");
-    else heroBanner.classList.add("hidden");
+    if (tabName === "classes") {
+      heroBanner.classList.remove("hidden");
+    } else {
+      heroBanner.classList.add("hidden");
+    }
   }
 
-  if (tabName === "admin") {
-    checkAdminAuthState();
+  if (tabName === "notices") {
+    loadNoticesData();
   } else if (tabName === "board") {
     loadBoardData();
-  } else if (tabName === "notices") {
-    loadNoticesData();
+  } else if (tabName === "admin") {
+    checkAdminAuthState();
   }
 }
 
-function updateHeroStats() {
-  const classes = AppState.classes || [];
-  const totalClasses = classes.length;
-  const totalApplicants = classes.reduce((sum, c) => sum + (c.currentApplied || 0), 0);
-  const availableClasses = classes.filter(c => !c.isFull && c.status !== "CLOSED" && !c.isDeadlinePassed).length;
-
-  document.getElementById("statTotalClasses").textContent = totalClasses;
-  document.getElementById("statTotalApplicants").textContent = totalApplicants;
-  document.getElementById("statAvailableClasses").textContent = availableClasses;
-}
-
+/* ==================================================================
+ * 수업 목록 및 검색/필터링
+ * ================================================================== */
 function renderSubjectFilters() {
   const container = document.getElementById("subjectFilterContainer");
   if (!container) return;
 
-  const categories = ["ALL", ...CONFIG.SUBJECT_CATEGORIES];
-  container.innerHTML = categories.map(cat => {
-    const isAll = cat === "ALL";
-    const label = isAll ? "전체 보기" : cat;
-    const isActive = AppState.activeSubjectFilter === cat;
-    const activeClass = isActive 
-      ? "bg-indigo-600 text-white font-semibold shadow-sm" 
+  const subjects = ["ALL", ...CONFIG.SUBJECT_CATEGORIES];
+  container.innerHTML = subjects.map(sub => {
+    const isActive = AppState.activeSubjectFilter === sub;
+    const label = sub === "ALL" ? "전체 교과" : sub;
+    const cls = isActive 
+      ? "bg-indigo-600 text-white shadow-sm font-bold" 
       : "bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium";
-
-    return `
-      <button onclick="filterSubject('${cat}')" class="px-3 py-1.5 rounded-full text-xs transition-all ${activeClass}">
-        ${label}
-      </button>
-    `;
+    
+    return `<button onclick="filterBySubject('${sub}')" class="px-3 py-1.5 rounded-xl text-xs transition-all ${cls}">${label}</button>`;
   }).join("");
 }
 
-function filterSubject(subject) {
+function filterBySubject(subject) {
   AppState.activeSubjectFilter = subject;
   renderSubjectFilters();
   renderClasses();
@@ -135,169 +149,128 @@ function handleClassSearch() {
   }
 }
 
-function showLoadingSkeletons() {
-  const grid = document.getElementById("classListGrid");
-  if (!grid) return;
-  
-  grid.innerHTML = Array(6).fill(0).map(() => `
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4 animate-pulse">
-      <div class="flex justify-between items-center">
-        <div class="h-5 w-16 bg-slate-200 rounded"></div>
-        <div class="h-5 w-20 bg-slate-200 rounded-full"></div>
-      </div>
-      <div class="h-6 w-3/4 bg-slate-200 rounded"></div>
-      <div class="h-10 bg-slate-200 rounded-xl"></div>
-    </div>
-  `).join("");
-}
-
 function renderClasses() {
   const grid = document.getElementById("classListGrid");
   if (!grid) return;
 
-  let list = AppState.classes || [];
+  let filtered = AppState.classes || [];
 
   if (AppState.activeSubjectFilter !== "ALL") {
-    list = list.filter(c => c.subject === AppState.activeSubjectFilter);
+    filtered = filtered.filter(c => c.subject === AppState.activeSubjectFilter);
   }
 
   if (AppState.searchQuery) {
     const q = AppState.searchQuery;
-    list = list.filter(c => 
-      (c.topic && c.topic.toLowerCase().includes(q)) ||
-      (c.teacher && c.teacher.toLowerCase().includes(q)) ||
-      (c.subject && c.subject.toLowerCase().includes(q)) ||
-      (c.location && c.location.toLowerCase().includes(q))
+    filtered = filtered.filter(c => 
+      c.teacher.toLowerCase().includes(q) ||
+      c.subject.toLowerCase().includes(q) ||
+      c.topic.toLowerCase().includes(q) ||
+      c.location.toLowerCase().includes(q)
     );
   }
 
-  if (list.length === 0) {
+  if (filtered.length === 0) {
     grid.innerHTML = `
-      <div class="col-span-full bg-white rounded-2xl p-12 text-center border border-slate-200 space-y-3">
-        <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full mx-auto flex items-center justify-center text-xl">
-          <i class="fa-solid fa-folder-open"></i>
+      <div class="col-span-full py-16 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 space-y-3">
+        <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 text-xl">
+          <i class="fa-solid fa-magnifying-glass"></i>
         </div>
-        <p class="text-sm font-semibold text-slate-700">개설된 수업이 없습니다.</p>
+        <p class="font-semibold text-sm">검색 조건에 해당하거나 개설된 수업이 없습니다.</p>
+        <p class="text-xs text-slate-400">다른 교과 카테고리를 선택하시거나 검색어를 변경해 보세요.</p>
       </div>
     `;
     return;
   }
 
-  grid.innerHTML = list.map(item => {
-    const isClosed = item.status === "CLOSED" || item.isFull || item.isDeadlinePassed;
-    const capacity = item.capacity || 0;
-    const current = item.currentApplied || 0;
-    const isImminent = !isClosed && capacity > 0 && (capacity - current) <= 2;
+  grid.innerHTML = filtered.map(c => renderClassCardHtml(c)).join("");
+}
 
-    let badgeHtml = "";
-    if (item.status === "CLOSED") {
-      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-lock mr-1"></i>수동 마감</span>`;
-    } else if (item.isDeadlinePassed) {
-      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-clock-rotate-left mr-1"></i>기한 마감</span>`;
-    } else if (isClosed) {
-      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-user-xmark mr-1"></i>정원 마감</span>`;
-    } else if (isImminent) {
-      badgeHtml = `<span class="badge-warning text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-fire mr-1"></i>마감 임박 (${capacity - current}석)</span>`;
-    } else {
-      badgeHtml = `<span class="badge-available text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-circle-check mr-1"></i>신청 가능</span>`;
-    }
+function renderClassCardHtml(c) {
+  const isClosed = c.isFull || c.status === "CLOSED" || c.isDeadlinePassed;
+  let badgeText = "신청 가능";
+  let badgeClass = "bg-emerald-500 text-white";
 
-    const percent = capacity > 0 ? Math.min(100, Math.round((current / capacity) * 100)) : 0;
-    const progressBarColor = isClosed ? "bg-rose-500" : (isImminent ? "bg-amber-500" : "bg-indigo-600");
+  if (c.status === "CLOSED") {
+    badgeText = "관리자 마감";
+    badgeClass = "bg-rose-500 text-white";
+  } else if (c.isDeadlinePassed) {
+    badgeText = "기한 마감";
+    badgeClass = "bg-rose-500 text-white";
+  } else if (c.isFull) {
+    badgeText = "선착순 마감";
+    badgeClass = "bg-rose-500 text-white";
+  }
 
-    const attachmentHtml = item.fileUrl ? `
-      <a href="${item.fileUrl}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200/60 transition-colors">
-        <i class="fa-solid fa-file-arrow-down"></i> ${item.fileName || "수업자료 다운로드"}
-      </a>
-    ` : "";
+  return `
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">${escapeHtml(c.subject)}</span>
+          <span class="px-2.5 py-1 rounded-lg text-xs font-bold ${badgeClass}">${badgeText}</span>
+        </div>
 
-    const deadlineHtml = item.deadline ? `
-      <div class="flex items-center gap-1 text-[11px] text-slate-400">
-        <i class="fa-regular fa-calendar-check text-slate-400"></i>
-        <span>신청마감일시: <strong class="text-slate-600 font-semibold">${item.deadline}</strong></span>
-      </div>
-    ` : "";
+        <div>
+          <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">${escapeHtml(c.topic)}</h3>
+          <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+            <span class="font-bold text-slate-800">${escapeHtml(c.teacher)} 선생님</span> (${escapeHtml(c.gradeGroup)})
+          </p>
+        </div>
 
-    return `
-      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
-        <div class="space-y-3">
-          <div class="flex justify-between items-center gap-2">
-            <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
-              ${escapeHtml(item.subject)}
-            </span>
-            ${badgeHtml}
-          </div>
-
-          <h3 class="text-base font-bold text-slate-900 leading-snug hover:text-indigo-600 transition-colors">
-            ${escapeHtml(item.topic)}
-          </h3>
-
-          <div class="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <div class="flex items-center gap-2">
-              <i class="fa-solid fa-user text-slate-400 w-4"></i>
-              <span class="font-semibold text-slate-800">${escapeHtml(item.teacher)} 선생님</span>
-              <span class="text-slate-400">|</span>
-              <span>${escapeHtml(item.gradeGroup)}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i class="fa-solid fa-clock text-slate-400 w-4"></i>
-              <span>${escapeHtml(item.dateTime)}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i class="fa-solid fa-location-dot text-slate-400 w-4"></i>
-              <span class="font-medium text-slate-700">${escapeHtml(item.location)}</span>
-            </div>
-          </div>
-
-          ${item.description ? `
-            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">
-              ${escapeHtml(item.description)}
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+          <p class="flex items-center gap-1.5">
+            <i class="fa-regular fa-clock text-slate-400"></i>
+            <span>${escapeHtml(c.dateTime)}</span>
+          </p>
+          <p class="flex items-center gap-1.5">
+            <i class="fa-solid fa-location-dot text-slate-400"></i>
+            <span>${escapeHtml(c.location)}</span>
+          </p>
+          ${c.deadline ? `
+            <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5">
+              <i class="fa-solid fa-hourglass-half text-amber-600"></i>
+              <span>마감기한: ${escapeHtml(c.deadline)}</span>
             </p>
           ` : ""}
         </div>
 
-        <div class="space-y-3 pt-2 border-t border-slate-100">
-          ${attachmentHtml}
-          ${deadlineHtml}
+        <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">${escapeHtml(c.description || "상세 수업 소개가 준비 중입니다.")}</p>
 
-          <div class="space-y-1">
-            <div class="flex justify-between text-xs font-semibold">
-              <span class="text-slate-500">참관 신청 현황</span>
-              <span class="text-slate-800">${current} / ${capacity > 0 ? capacity + "명" : "제한없음"}</span>
-            </div>
-            ${capacity > 0 ? `
-              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div class="${progressBarColor} h-2 rounded-full transition-all duration-500" style="width: ${percent}%"></div>
-              </div>
-            ` : ""}
+        ${c.fileUrl ? `
+          <div class="pt-1">
+            <a href="${c.fileUrl}" target="_blank" class="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold hover:underline bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+              <i class="fa-solid fa-file-pdf"></i> ${escapeHtml(c.fileName || "수업지도안 다운로드")}
+            </a>
           </div>
-
-          <button 
-            onclick="openApplyModal('${item.id}')"
-            ${isClosed ? "disabled" : ""}
-            class="w-full py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 ${
-              isClosed 
-                ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" 
-                : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200"
-            }">
-            ${isClosed ? `<i class="fa-solid fa-ban"></i> 참관 신청 마감` : `<i class="fa-solid fa-pen-nib"></i> 참관 신청하기`}
-          </button>
-        </div>
+        ` : ""}
       </div>
-    `;
-  }).join("");
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+        <div class="text-xs">
+          <span class="text-slate-400">신청 인원: </span>
+          <span class="font-extrabold text-indigo-600">${c.currentApplied || 0}</span>
+          <span class="text-slate-400"> / ${c.capacity > 0 ? c.capacity + '명' : '제한없음'}</span>
+        </div>
+
+        <button onclick="openApplyModal('${c.id}')" ${isClosed ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${isClosed ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow'}">
+          ${isClosed ? '신청 마감' : '참관 신청하기'}
+        </button>
+      </div>
+    </div>
+  `;
 }
 
+/* ==================================================================
+ * 참관 신청 모달 처리
+ * ================================================================== */
 function openApplyModal(classId) {
-  const item = AppState.classes.find(c => String(c.id) === String(classId));
-  if (!item) return;
+  const target = AppState.classes.find(c => String(c.id) === String(classId));
+  if (!target) return;
 
-  document.getElementById("applyClassId").value = item.id;
-  document.getElementById("modalClassSubject").textContent = item.subject;
-  document.getElementById("modalClassTopic").textContent = item.topic;
-  document.getElementById("modalClassTeacher").textContent = `${item.teacher} 선생님 | ${item.location}`;
-
-  document.getElementById("applyForm").reset();
+  document.getElementById("applyClassId").value = target.id;
+  document.getElementById("modalClassSubject").textContent = target.subject;
+  document.getElementById("modalClassTopic").textContent = target.topic;
+  document.getElementById("modalClassTeacher").textContent = `${target.teacher} 선생님 | ${target.location} (${target.dateTime})`;
 
   const modal = document.getElementById("applyModal");
   if (modal) modal.classList.remove("hidden");
@@ -310,9 +283,9 @@ function closeApplyModal() {
 
 async function submitApplication(event) {
   event.preventDefault();
-  const submitBtn = document.getElementById("applySubmitBtn");
-  const originalText = submitBtn.innerHTML;
-  
+  const btn = document.getElementById("applySubmitBtn");
+  const origText = btn.innerHTML;
+
   const payload = {
     classId: document.getElementById("applyClassId").value,
     applicantName: document.getElementById("applyName").value.trim(),
@@ -323,23 +296,25 @@ async function submitApplication(event) {
   };
 
   try {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> 접수 처리 중...`;
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 접수 중...`;
 
     const res = await API.post("applyClass", payload);
-    showToast(res.message || "참관 신청이 정상 완료되었습니다!", "success");
+    showToast(res.message || "참관 신청이 정상 완료되었습니다.", "success");
     closeApplyModal();
+    
+    document.getElementById("applyForm").reset();
     await loadInitialData();
   } catch (err) {
-    showToast(`신청 실패: ${err.message}`, "error");
+    showToast(err.message, "error");
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = originalText;
+    btn.disabled = false;
+    btn.innerHTML = origText;
   }
 }
 
 /* ==================================================================
- * 참관 신청 확인 / 수정 / 취소 기능
+ * 본인 참관 신청 확인 / 수정 / 취소 모달
  * ================================================================== */
 function openCheckApplyModal() {
   const modal = document.getElementById("checkApplyModal");
@@ -360,18 +335,13 @@ async function handleCheckApplySubmit(event) {
   event.preventDefault();
   const name = document.getElementById("checkName").value.trim();
   const phone = document.getElementById("checkPhone").value.trim();
+  const btn = document.getElementById("checkSubmitBtn");
 
-  if (!name || !phone) {
-    showToast("성명과 연락처를 입력해주세요.", "error");
-    return;
-  }
-
-  const submitBtn = document.getElementById("checkSubmitBtn");
-  const origText = submitBtn.innerHTML;
+  if (!name || !phone) return;
 
   try {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 조회 중...`;
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 조회 중...`;
 
     const list = await API.post("checkMyApplications", { applicantName: name, phone: phone });
     AppState.myApplications = list || [];
@@ -379,20 +349,20 @@ async function handleCheckApplySubmit(event) {
 
     closeCheckApplyModal();
     renderMyApplicationsResult();
+
+    const resultModal = document.getElementById("myApplyResultModal");
+    if (resultModal) resultModal.classList.remove("hidden");
   } catch (err) {
     showToast(`조회 실패: ${err.message}`, "error");
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = origText;
+    btn.disabled = false;
+    btn.innerHTML = `신청 내역 조회`;
   }
 }
 
 function renderMyApplicationsResult() {
-  const modal = document.getElementById("myApplyResultModal");
   const container = document.getElementById("myApplyListContainer");
-  if (!modal || !container) return;
-
-  modal.classList.remove("hidden");
+  if (!container) return;
 
   const apps = AppState.myApplications || [];
 
@@ -425,14 +395,12 @@ function renderMyApplicationsResult() {
 
       <h4 class="text-sm font-bold text-slate-900">${escapeHtml(a.className)}</h4>
 
-      <!-- 기본 정보 보기 -->
       <div id="myAppView-${a.classId}" class="space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
         <p><strong>신청자:</strong> ${escapeHtml(a.applicantName)} (${escapeHtml(a.school)})</p>
         <p><strong>연락처:</strong> ${escapeHtml(a.phone)} | <strong>이메일:</strong> ${escapeHtml(a.email || "미입력")}</p>
         <p><strong>기대사항/비고:</strong> ${escapeHtml(a.remark || "없음")}</p>
       </div>
 
-      <!-- 정보 수정 폼 (초기 숨김) -->
       <form id="myAppEditForm-${a.classId}" onsubmit="saveMyApplyEdit(event, '${a.classId}')" class="hidden space-y-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
         <div>
           <label class="block font-semibold text-slate-700 mb-1">소속 학교명 *</label>
@@ -481,7 +449,6 @@ async function saveMyApplyEdit(event, classId) {
     const res = await API.post("updateMyApplication", payload);
     showToast(res.message || "수정되었습니다.", "success");
     
-    // 로컬 상태 업데이트 후 재렌더링
     const target = AppState.myApplications.find(a => String(a.classId) === String(classId));
     if (target) {
       target.school = payload.school;
@@ -516,9 +483,9 @@ async function cancelMyApply(classId) {
   }
 }
 
-/**
- * 공지사항 및 게시판 로직
- */
+/* ==================================================================
+ * 공지사항 및 게시판 로직 (비밀글 및 파일 첨부 지원)
+ * ================================================================== */
 async function loadNoticesData() {
   try {
     const list = await API.get("getNotices");
@@ -563,7 +530,7 @@ function renderNotices() {
 
 async function loadBoardData() {
   try {
-    const list = await API.get("getBoard");
+    const list = await API.get("getBoard", { adminPassword: AdminState.adminPassword });
     AppState.board = list || [];
     renderBoard();
   } catch (e) {
@@ -605,14 +572,25 @@ function renderBoard() {
   }
 
   container.innerHTML = list.map(item => `
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between ${item.isSecret ? "bg-amber-50/20 border-amber-200" : ""}">
       <div class="space-y-2">
         <div class="flex justify-between items-center">
-          <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">${escapeHtml(item.category || "자유소통")}</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">${escapeHtml(item.category || "자유소통")}</span>
+            ${item.isSecret ? `<span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200"><i class="fa-solid fa-lock mr-1"></i>비밀글</span>` : ""}
+          </div>
           <span class="text-xs text-slate-400">${item.createdAt || ""}</span>
         </div>
-        <h3 class="text-sm font-bold text-slate-900">${escapeHtml(item.title)}</h3>
-        <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">${escapeHtml(item.content)}</p>
+        <h3 class="text-sm font-bold ${item.isSecret ? "text-amber-900" : "text-slate-900"}">${escapeHtml(item.title)}</h3>
+        <p class="text-xs ${item.isSecret ? "text-slate-400 italic" : "text-slate-600"} whitespace-pre-line leading-relaxed">${escapeHtml(item.content)}</p>
+        
+        ${item.fileUrl ? `
+          <div class="pt-1">
+            <a href="${item.fileUrl}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-700 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors">
+              <i class="fa-solid fa-paperclip"></i> ${escapeHtml(item.fileName || "첨부파일 다운로드")}
+            </a>
+          </div>
+        ` : ""}
       </div>
 
       <div class="flex justify-between items-center pt-3 border-t border-slate-100 text-xs">
@@ -638,13 +616,28 @@ async function submitBoardPost(event) {
   const btn = document.getElementById("boardSubmitBtn");
   const orig = btn.innerHTML;
 
+  const fileInput = document.getElementById("boardFileInput");
+  let fileData = null;
+
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    try {
+      fileData = await readFileAsBase64(file);
+    } catch (e) {
+      showToast("파일을 읽는 도중 오류가 발생했습니다.", "error");
+      return;
+    }
+  }
+
   const payload = {
     author: document.getElementById("boardAuthor").value.trim(),
     school: document.getElementById("boardSchool").value.trim(),
     category: document.getElementById("boardCategory").value,
     password: document.getElementById("boardPassword").value.trim(),
     title: document.getElementById("boardTitle").value.trim(),
-    content: document.getElementById("boardContent").value.trim()
+    content: document.getElementById("boardContent").value.trim(),
+    isSecret: document.getElementById("boardIsSecret").checked,
+    fileData: fileData
   };
 
   try {
@@ -652,11 +645,18 @@ async function submitBoardPost(event) {
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 저장 중...`;
 
     const res = await API.post("createBoardPost", payload);
-    showToast(res.message || "글이 등록되었습니다.", "success");
+    showToast(res.message || "글이 성공적으로 등록되었습니다.", "success");
     closeBoardWriteModal();
+    
+    document.getElementById("boardTitle").value = "";
+    document.getElementById("boardContent").value = "";
+    document.getElementById("boardPassword").value = "";
+    if (fileInput) fileInput.value = "";
+    document.getElementById("boardIsSecret").checked = false;
+
     await loadBoardData();
   } catch (err) {
-    showToast(err.message, "error");
+    showToast(`등록 실패: ${err.message}`, "error");
   } finally {
     btn.disabled = false;
     btn.innerHTML = orig;
@@ -666,24 +666,26 @@ async function submitBoardPost(event) {
 function openBoardDeleteModal(postId) {
   document.getElementById("deletePostId").value = postId;
   document.getElementById("deletePostPassword").value = "";
-  document.getElementById("boardDeleteModal").classList.remove("hidden");
+  const modal = document.getElementById("boardDeleteModal");
+  if (modal) modal.classList.remove("hidden");
 }
 
 function closeBoardDeleteModal() {
-  document.getElementById("boardDeleteModal").classList.add("hidden");
+  const modal = document.getElementById("boardDeleteModal");
+  if (modal) modal.classList.add("hidden");
 }
 
 async function confirmDeleteBoardPost() {
   const postId = document.getElementById("deletePostId").value;
-  const password = document.getElementById("deletePostPassword").value;
+  const pw = document.getElementById("deletePostPassword").value.trim();
 
-  if (!password) {
+  if (!pw) {
     showToast("비밀번호를 입력해주세요.", "error");
     return;
   }
 
   try {
-    const res = await API.post("deleteBoardPost", { postId, password });
+    const res = await API.post("deleteBoardPost", { postId, password: pw }, AdminState.adminPassword);
     showToast(res.message || "삭제되었습니다.", "success");
     closeBoardDeleteModal();
     await loadBoardData();
@@ -692,24 +694,36 @@ async function confirmDeleteBoardPost() {
   }
 }
 
+/* ==================================================================
+ * 공통 유틸리티 (토스트, HTML 이스케이프)
+ * ================================================================== */
 function showToast(message, type = "info") {
   const container = document.getElementById("toastContainer");
   if (!container) return;
 
-  const colors = {
+  const toast = document.createElement("div");
+  const bgMap = {
     success: "bg-emerald-600 text-white",
     error: "bg-rose-600 text-white",
     info: "bg-slate-800 text-white"
   };
+  const iconMap = {
+    success: "fa-circle-check",
+    error: "fa-circle-exclamation",
+    info: "fa-circle-info"
+  };
 
-  const toast = document.createElement("div");
-  toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 pointer-events-auto transition-all animate-scaleUp`;
-  toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+  toast.className = `flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-xs font-semibold transform transition-all duration-300 translate-y-2 opacity-0 pointer-events-auto ${bgMap[type] || bgMap.info}`;
+  toast.innerHTML = `<i class="fa-solid ${iconMap[type] || iconMap.info}"></i> <span>${escapeHtml(message)}</span>`;
 
   container.appendChild(toast);
 
   setTimeout(() => {
-    toast.style.opacity = "0";
+    toast.classList.remove("translate-y-2", "opacity-0");
+  }, 10);
+
+  setTimeout(() => {
+    toast.classList.add("opacity-0", "translate-y-2");
     setTimeout(() => toast.remove(), 300);
   }, 3500);
 }

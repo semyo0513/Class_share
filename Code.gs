@@ -7,7 +7,7 @@
  * - SHA-256 해시 기반 관리자 및 게시글 비밀번호 인증
  * - 참관 신청 조회 / 수정 / 취소 API 지원
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
- * - 수업지도안 및 공지사항 구글 드라이브 첨부파일 업로드 지원
+ * - 수업지도안, 공지사항, 게시판 Q&A 구글 드라이브 첨부파일 업로드 및 비밀글 지원
  */
 
 const SPREADSHEET_ID = "";
@@ -50,7 +50,7 @@ function doGet(e) {
       case "getNotices":
         return createJsonResponse(getNoticesList());
       case "getBoard":
-        return createJsonResponse(getBoardList());
+        return createJsonResponse(getBoardList(params.adminPassword));
       case "getAdminApplications":
         if (!verifyAdminPassword(params.adminPassword)) {
           return createJsonResponse({ error: "관리자 인증 실패 (비밀번호 오류)" }, 401, false);
@@ -101,7 +101,7 @@ function doPost(e) {
       case "createBoardPost":
         return createJsonResponse(handleCreateBoardPost(postData.payload));
       case "deleteBoardPost":
-        return createJsonResponse(handleDeleteBoardPost(postData.payload));
+        return createJsonResponse(handleDeleteBoardPost(postData.payload, postData.adminPassword));
 
       case "adminLogin":
         const isValid = verifyAdminPassword(postData.adminPassword);
@@ -572,7 +572,6 @@ function handleSaveNotice(payload) {
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   let fileUrl = payload.fileUrl || "";
 
-  // 공지사항 구글 드라이브 첨부파일 업로드
   if (payload.fileData && payload.fileData.base64) {
     try {
       const folderId = getConfigValue("DRIVE_FOLDER_ID");
@@ -648,7 +647,10 @@ function handleDeleteNotice(noticeId) {
   throw new Error("삭제할 공지사항을 찾지 못했습니다.");
 }
 
-function getBoardList() {
+/**
+ * 게시판 Q&A 목록 조회 (비밀글 권한 제어 포함)
+ */
+function getBoardList(adminPassword) {
   const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.BOARD);
   if (!sheet) return [];
@@ -656,28 +658,81 @@ function getBoardList() {
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
 
+  const isAdmin = verifyAdminPassword(adminPassword);
   const rows = data.slice(1);
-  return rows.map(r => ({
-    id: String(r[0]),
-    createdAt: formatDateVal(r[1]),
-    author: r[2],
-    school: r[3],
-    title: r[4],
-    content: r[5],
-    category: r[7] || "자유소통"
-  })).reverse();
+
+  return rows.map(r => {
+    const isSecret = String(r[8]).toUpperCase() === "TRUE" || r[8] === true;
+    const fileUrl = r[9] || "";
+    const fileName = r[10] || "";
+
+    return {
+      id: String(r[0]),
+      createdAt: formatDateVal(r[1]),
+      author: r[2],
+      school: r[3],
+      title: (isSecret && !isAdmin) ? "🔒 비밀글입니다. (작성자와 관리자만 확인 가능합니다)" : r[4],
+      content: (isSecret && !isAdmin) ? "비밀글은 작성자와 관리자만 볼 수 있습니다." : r[5],
+      category: r[7] || "자유소통",
+      isSecret: isSecret,
+      fileUrl: (isSecret && !isAdmin) ? "" : fileUrl,
+      fileName: (isSecret && !isAdmin) ? "" : fileName
+    };
+  }).reverse();
 }
 
+/**
+ * 게시판 글 작성 (비밀글 및 구글 드라이브 파일 업로드)
+ */
 function handleCreateBoardPost(payload) {
   if (!payload || !payload.title || !payload.content || !payload.author || !payload.password) {
-    throw new Error("필수 입력 항목이 누락되었습니다.");
+    throw new Error("성명, 비밀번호, 제목, 내용은 필수 입력 항목입니다.");
   }
 
   const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.BOARD);
+  let sheet = ss.getSheetByName(SHEETS.BOARD);
+  if (!sheet) {
+    initDatabaseSheets();
+    sheet = ss.getSheetByName(SHEETS.BOARD);
+  }
+
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   const postId = `BRD-${Date.now().toString().slice(-6)}`;
   const pwHash = computeSha256(payload.password);
+
+  let fileUrl = payload.fileUrl || "";
+  let fileName = payload.fileName || "";
+
+  if (payload.fileData && payload.fileData.base64) {
+    try {
+      const folderId = getConfigValue("DRIVE_FOLDER_ID");
+      let targetFolder = DriveApp.getRootFolder();
+      
+      if (folderId && folderId.trim() !== "") {
+        try {
+          targetFolder = DriveApp.getFolderById(folderId.trim());
+        } catch (e) {
+          Logger.log("지정된 폴더를 찾을 수 없어 루트 폴더에 저장합니다: " + e.toString());
+        }
+      }
+      
+      const contentType = payload.fileData.mimeType || "application/octet-stream";
+      const base64Str = payload.fileData.base64.includes(",") 
+        ? payload.fileData.base64.split(",")[1] 
+        : payload.fileData.base64;
+      
+      const decodedBytes = Utilities.base64Decode(base64Str);
+      const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
+      
+      const file = targetFolder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
+      fileUrl = file.getUrl();
+      fileName = payload.fileData.name;
+    } catch (fileErr) {
+      throw new Error("게시글 첨부파일 구글 드라이브 업로드 오류: " + fileErr.toString());
+    }
+  }
 
   sheet.appendRow([
     postId,
@@ -687,13 +742,16 @@ function handleCreateBoardPost(payload) {
     payload.title,
     payload.content,
     pwHash,
-    payload.category || "자유소통"
+    payload.category || "자유소통",
+    payload.isSecret ? "TRUE" : "FALSE",
+    fileUrl,
+    fileName
   ]);
 
-  return { message: "게시글이 등록되었습니다." };
+  return { message: "게시글이 구글 드라이브 첨부파일과 함께 성공적으로 등록되었습니다." };
 }
 
-function handleDeleteBoardPost(payload) {
+function handleDeleteBoardPost(payload, adminPassword) {
   if (!payload || !payload.postId || !payload.password) {
     throw new Error("게시글 ID와 비밀번호를 입력해주세요.");
   }
@@ -706,7 +764,7 @@ function handleDeleteBoardPost(payload) {
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(payload.postId)) {
       const storedHash = String(rows[i][6]);
-      if (storedHash !== inputHash && !verifyAdminPassword(payload.password)) {
+      if (storedHash !== inputHash && !verifyAdminPassword(adminPassword || payload.password)) {
         throw new Error("비밀번호가 일치하지 않습니다.");
       }
       sheet.deleteRow(i + 1);
@@ -823,7 +881,7 @@ function initDatabaseSheets() {
   let boardSheet = ss.getSheetByName(SHEETS.BOARD);
   if (!boardSheet) {
     boardSheet = ss.insertSheet(SHEETS.BOARD);
-    boardSheet.appendRow(["id", "createdAt", "author", "school", "title", "content", "passwordHash", "category"]);
+    boardSheet.appendRow(["id", "createdAt", "author", "school", "title", "content", "passwordHash", "category", "isSecret", "fileUrl", "fileName"]);
   }
 
   let configSheet = ss.getSheetByName(SHEETS.CONFIG);
