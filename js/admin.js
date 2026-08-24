@@ -11,9 +11,6 @@ const AdminState = {
   applications: []
 };
 
-/**
- * 로그인 상태 확인 및 화면 토글
- */
 function checkAdminAuthState() {
   const savedPw = sessionStorage.getItem("SAMHYUN_ADMIN_PW");
   if (savedPw) {
@@ -36,9 +33,6 @@ function checkAdminAuthState() {
   }
 }
 
-/**
- * 관리자 로그인 폼 제출
- */
 async function handleAdminLoginSubmit(event) {
   event.preventDefault();
   const inputEl = document.getElementById("adminPasswordInput");
@@ -67,9 +61,6 @@ async function handleAdminLoginSubmit(event) {
   }
 }
 
-/**
- * 관리자 로그아웃
- */
 function handleAdminLogout() {
   AdminState.isLoggedIn = false;
   AdminState.adminPassword = "";
@@ -78,9 +69,6 @@ function handleAdminLogout() {
   checkAdminAuthState();
 }
 
-/**
- * 관리자 대시보드 렌더링
- */
 function renderAdminDashboard() {
   const container = document.getElementById("adminPanelContainer");
   if (!container) return;
@@ -97,10 +85,9 @@ function renderAdminDashboard() {
         </button>
       </div>
 
-      <!-- 서브 탭 메뉴 -->
       <div class="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
         <button onclick="switchAdminSubTab('classes')" id="adminSubTab-classes" class="admin-subtab px-4 py-2 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm">
-          <i class="fa-solid fa-chalkboard-user mr-1"></i> 수업 개설 및 관리
+          <i class="fa-solid fa-chalkboard-user mr-1"></i> 수업 개설 및 마감 관리
         </button>
         <button onclick="switchAdminSubTab('applicants')" id="adminSubTab-applicants" class="admin-subtab px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
           <i class="fa-solid fa-users mr-1"></i> 참관 신청자 명단
@@ -110,20 +97,14 @@ function renderAdminDashboard() {
         </button>
       </div>
 
-      <!-- 서브 탭 컨텐츠 영역 -->
       <div id="adminSubContent"></div>
     </div>
-
-    <!-- Admin Modals Container -->
     <div id="adminModalsContainer"></div>
   `;
 
   switchAdminSubTab(AdminState.activeSubTab);
 }
 
-/**
- * 서브 탭 전환
- */
 function switchAdminSubTab(subTab) {
   AdminState.activeSubTab = subTab;
 
@@ -148,7 +129,7 @@ function switchAdminSubTab(subTab) {
 }
 
 /* ==================================================================
- * 1. 수업 개설 및 관리 서브 탭
+ * 1. 수업 개설 및 마감 관리 서브 탭
  * ================================================================== */
 function renderAdminClassesView() {
   const container = document.getElementById("adminSubContent");
@@ -171,46 +152,48 @@ function renderAdminClassesView() {
               <th class="p-3">수업자 / 장소</th>
               <th class="p-3">수업 주제</th>
               <th class="p-3">신청/정원</th>
-              <th class="p-3">첨부자료</th>
-              <th class="p-3 text-right">관리</th>
+              <th class="p-3">신청 마감 기한</th>
+              <th class="p-3 text-right">상태 / 관리</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${classes.length === 0 ? `
               <tr><td colspan="6" class="p-8 text-center text-slate-400">등록된 수업이 없습니다.</td></tr>
-            ` : classes.map(c => `
-              <tr class="hover:bg-slate-50">
-                <td class="p-3 font-semibold">
-                  <span class="text-indigo-600 block">${c.id}</span>
-                  <span class="text-slate-500">${escapeHtml(c.subject)}</span>
-                </td>
-                <td class="p-3">
-                  <div class="font-bold text-slate-900">${escapeHtml(c.teacher)}</div>
-                  <div class="text-slate-400 text-[11px]">${escapeHtml(c.location)}</div>
-                </td>
-                <td class="p-3 max-w-xs font-medium text-slate-800">
-                  ${escapeHtml(c.topic)}
-                </td>
-                <td class="p-3">
-                  <span class="font-bold text-indigo-700">${c.currentApplied || 0}</span> / ${c.capacity > 0 ? c.capacity + '명' : '제한없음'}
-                </td>
-                <td class="p-3">
-                  ${c.fileUrl ? `
-                    <a href="${c.fileUrl}" target="_blank" class="text-indigo-600 hover:underline inline-flex items-center gap-1">
-                      <i class="fa-solid fa-paperclip"></i> ${escapeHtml(c.fileName || "첨부파일")}
-                    </a>
-                  ` : `<span class="text-slate-300">없음</span>`}
-                </td>
-                <td class="p-3 text-right space-x-1">
-                  <button onclick="openClassFormModal('${c.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold">
-                    수정
-                  </button>
-                  <button onclick="deleteAdminClass('${c.id}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-semibold">
-                    삭제
-                  </button>
-                </td>
-              </tr>
-            `).join("")}
+            ` : classes.map(c => {
+              const isClosed = c.status === "CLOSED";
+              return `
+                <tr class="hover:bg-slate-50">
+                  <td class="p-3 font-semibold">
+                    <span class="text-indigo-600 block">${c.id}</span>
+                    <span class="text-slate-500">${escapeHtml(c.subject)}</span>
+                  </td>
+                  <td class="p-3">
+                    <div class="font-bold text-slate-900">${escapeHtml(c.teacher)}</div>
+                    <div class="text-slate-400 text-[11px]">${escapeHtml(c.location)}</div>
+                  </td>
+                  <td class="p-3 max-w-xs font-medium text-slate-800">
+                    ${escapeHtml(c.topic)}
+                  </td>
+                  <td class="p-3 whitespace-nowrap">
+                    <span class="font-bold text-indigo-700">${c.currentApplied || 0}</span> / ${c.capacity > 0 ? c.capacity + '명' : '제한없음'}
+                  </td>
+                  <td class="p-3 whitespace-nowrap text-slate-500">
+                    ${c.deadline ? escapeHtml(c.deadline) : '<span class="text-slate-300">미설정</span>'}
+                  </td>
+                  <td class="p-3 text-right whitespace-nowrap space-x-1">
+                    <button onclick="toggleAdminClassStatus('${c.id}', '${c.status}')" class="px-2.5 py-1 ${isClosed ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-rose-100 hover:bg-rose-200 text-rose-800'} rounded-lg text-[11px] font-semibold">
+                      ${isClosed ? '<i class="fa-solid fa-lock-open mr-1"></i>신청 재개' : '<i class="fa-solid fa-lock mr-1"></i>신청 마감'}
+                    </button>
+                    <button onclick="openClassFormModal('${c.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold">
+                      수정
+                    </button>
+                    <button onclick="deleteAdminClass('${c.id}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-semibold">
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
           </tbody>
         </table>
       </div>
@@ -218,9 +201,6 @@ function renderAdminClassesView() {
   `;
 }
 
-/**
- * 수업 개설/수정 모달 오픈
- */
 function openClassFormModal(classId = null) {
   const item = classId ? AppState.classes.find(c => String(c.id) === String(classId)) : null;
 
@@ -273,6 +253,12 @@ function openClassFormModal(classId = null) {
           </div>
 
           <div>
+            <label class="block font-semibold text-slate-700 mb-1">수업 참관 신청 마감 기한 (선택)</label>
+            <input type="text" id="formClassDeadline" value="${item ? escapeHtml(item.deadline || "") : ""}" placeholder="예: 2026-10-14 18:00:00 (미입력 시 무기한)" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
+            <p class="text-[11px] text-slate-400 mt-1">지정한 일시가 지나면 해당 수업은 자동으로 참관 신청이 마감됩니다.</p>
+          </div>
+
+          <div>
             <label class="block font-semibold text-slate-700 mb-1">수업 주제 *</label>
             <input type="text" id="formClassTopic" required value="${item ? escapeHtml(item.topic) : ""}" placeholder="예: AI 도구를 활용한 논증문 쓰기" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
           </div>
@@ -282,7 +268,6 @@ function openClassFormModal(classId = null) {
             <textarea id="formClassDesc" rows="3" placeholder="수업 진행 의도 및 관전 포인트를 기술하세요." class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">${item ? escapeHtml(item.description || "") : ""}</textarea>
           </div>
 
-          <!-- 첨부파일 업로드 -->
           <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
             <label class="block font-semibold text-slate-700">수업지도안 / 학습자료 첨부 (PDF, HWP, PPT)</label>
             <input type="file" id="formClassFileInput" class="w-full text-xs text-slate-500">
@@ -303,9 +288,6 @@ function openClassFormModal(classId = null) {
   document.getElementById("adminModalsContainer").innerHTML = modalHtml;
 }
 
-/**
- * 수업 개설/수정 저장
- */
 async function saveAdminClass(event) {
   event.preventDefault();
   const btn = document.getElementById("saveClassSubmitBtn");
@@ -334,6 +316,7 @@ async function saveAdminClass(event) {
     capacity: Number(document.getElementById("formClassCapacity").value) || 0,
     topic: document.getElementById("formClassTopic").value.trim(),
     description: document.getElementById("formClassDesc").value.trim(),
+    deadline: document.getElementById("formClassDeadline").value.trim(),
     fileData: fileData
   };
 
@@ -354,11 +337,24 @@ async function saveAdminClass(event) {
   }
 }
 
-/**
- * 수업 삭제
- */
+async function toggleAdminClassStatus(classId, currentStatus) {
+  const nextStatus = currentStatus === "CLOSED" ? "ACTIVE" : "CLOSED";
+  const actionName = nextStatus === "CLOSED" ? "신청 마감" : "신청 재개";
+
+  if (!confirm(`이 수업을 [${actionName}] 상태로 변경하시겠습니까?`)) return;
+
+  try {
+    const res = await API.post("toggleClassStatus", { classId, status: nextStatus }, AdminState.adminPassword);
+    showToast(res.message || "상태가 변경되었습니다.", "success");
+    await loadInitialData();
+    renderAdminClassesView();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
 async function deleteAdminClass(classId) {
-  if (!confirm("정말 이 수업을 삭제하시겠습니까? 관련 신청 데이터에 영향이 있을 수 있습니다.")) return;
+  if (!confirm("정말 이 수업을 삭제하시겠습니까?")) return;
 
   try {
     const res = await API.post("deleteClass", { classId }, AdminState.adminPassword);
@@ -416,20 +412,24 @@ function renderApplicantTable() {
               <th class="p-3">연락처</th>
               <th class="p-3">이메일</th>
               <th class="p-3">신청 수업명</th>
+              <th class="p-3">상태</th>
               <th class="p-3">비고 / 참관목적</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${apps.length === 0 ? `
-              <tr><td colspan="7" class="p-8 text-center text-slate-400">접수된 신청 내역이 없습니다.</td></tr>
+              <tr><td colspan="8" class="p-8 text-center text-slate-400">접수된 신청 내역이 없습니다.</td></tr>
             ` : apps.map(a => `
-              <tr class="hover:bg-slate-50">
-                <td class="p-3 text-slate-400 whitespace-nowrap">${a.timestamp}</td>
+              <tr class="hover:bg-slate-50 ${a.status === 'CANCELLED' ? 'bg-slate-100/70 text-slate-400 line-through' : ''}">
+                <td class="p-3 whitespace-nowrap">${a.timestamp}</td>
                 <td class="p-3 font-bold text-slate-900 whitespace-nowrap">${escapeHtml(a.applicantName)}</td>
                 <td class="p-3 font-medium text-slate-800 whitespace-nowrap">${escapeHtml(a.school)}</td>
                 <td class="p-3 whitespace-nowrap">${escapeHtml(a.phone)}</td>
                 <td class="p-3 whitespace-nowrap">${escapeHtml(a.email)}</td>
                 <td class="p-3 font-semibold text-indigo-700 max-w-xs">${escapeHtml(a.className)}</td>
+                <td class="p-3 whitespace-nowrap font-bold ${a.status === 'CANCELLED' ? 'text-rose-500' : 'text-emerald-600'}">
+                  ${a.status === 'CANCELLED' ? '신청취소' : '신청완료'}
+                </td>
                 <td class="p-3 max-w-xs text-slate-500">${escapeHtml(a.remark || "-")}</td>
               </tr>
             `).join("")}
@@ -440,17 +440,14 @@ function renderApplicantTable() {
   `;
 }
 
-/**
- * 엑셀 CSV 다운로드
- */
 function exportApplicantsCsv() {
-  const apps = AdminState.applications || [];
+  const apps = (AdminState.applications || []).filter(a => a.status !== "CANCELLED");
   if (apps.length === 0) {
     showToast("다운로드할 신청 내역이 없습니다.", "error");
     return;
   }
 
-  let csvContent = "\uFEFF"; // UTF-8 BOM
+  let csvContent = "\uFEFF";
   csvContent += "신청일시,성명,소속학교,연락처,이메일,신청수업,참관목적\n";
 
   apps.forEach(a => {
@@ -476,11 +473,8 @@ function exportApplicantsCsv() {
   document.body.removeChild(link);
 }
 
-/**
- * 명단 인쇄 기능
- */
 function printApplicantsList() {
-  const apps = AdminState.applications || [];
+  const apps = (AdminState.applications || []).filter(a => a.status !== "CANCELLED");
   const printArea = document.getElementById("printArea");
   if (!printArea) return;
 
@@ -570,22 +564,18 @@ function openNoticeFormModal(noticeId = null) {
 
         <form onsubmit="saveAdminNotice(event)" class="space-y-4 text-xs">
           <input type="hidden" id="formNoticeId" value="${item ? item.id : ""}">
-
           <div>
             <label class="block font-semibold text-slate-700 mb-1">제목 *</label>
             <input type="text" id="formNoticeTitle" required value="${item ? escapeHtml(item.title) : ""}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
           </div>
-
           <div>
             <label class="block font-semibold text-slate-700 mb-1">내용 *</label>
             <textarea id="formNoticeContent" rows="5" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">${item ? escapeHtml(item.content) : ""}</textarea>
           </div>
-
           <div class="flex items-center gap-2">
             <input type="checkbox" id="formNoticePinned" ${item && item.isPinned ? "checked" : ""} class="rounded text-indigo-600 focus:ring-indigo-500">
             <label for="formNoticePinned" class="font-semibold text-slate-700">목록 상단에 고정 표시</label>
           </div>
-
           <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
             <button type="button" onclick="closeAdminModal('adminNoticeModal')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold">취소</button>
             <button type="submit" id="saveNoticeSubmitBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow">저장하기</button>
@@ -640,9 +630,6 @@ async function deleteAdminNotice(noticeId) {
   }
 }
 
-/**
- * FileReader API로 파일 Base64 변환
- */
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

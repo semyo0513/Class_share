@@ -4,7 +4,6 @@
  * ==================================================================
  */
 
-// 애플리케이션 전역 상태
 const AppState = {
   activeTab: "classes",
   activeSubjectFilter: "ALL",
@@ -13,26 +12,21 @@ const AppState = {
   classes: [],
   notices: [],
   board: [],
-  config: {}
+  config: {},
+  myApplications: [],
+  currentCheckUser: { name: "", phone: "" }
 };
 
-// DOM 로드 후 초기화
 document.addEventListener("DOMContentLoaded", () => {
   initApp();
 });
 
-/**
- * 앱 초기화 및 데이터 로드
- */
 async function initApp() {
   renderSubjectFilters();
   renderBoardCategoryFilters();
   await loadInitialData();
 }
 
-/**
- * 초기 데이터 로드 (API)
- */
 async function loadInitialData() {
   try {
     showLoadingSkeletons();
@@ -59,13 +53,9 @@ async function loadInitialData() {
   }
 }
 
-/**
- * 탭 전환 제어
- */
 function navigateTab(tabName) {
   AppState.activeTab = tabName;
 
-  // 탭 버튼 스타일 업데이트
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.remove("bg-indigo-800", "text-white");
     btn.classList.add("text-indigo-200");
@@ -77,7 +67,6 @@ function navigateTab(tabName) {
     activeBtn.classList.add("bg-indigo-800", "text-white");
   }
 
-  // 섹션 컨테이너 토글
   document.querySelectorAll(".tab-content").forEach(sec => sec.classList.add("hidden"));
   const activeSec = document.getElementById(`view-${tabName}`);
   if (activeSec) {
@@ -85,17 +74,12 @@ function navigateTab(tabName) {
     activeSec.classList.add("animate-fadeIn");
   }
 
-  // 히어로 배너는 수업 목록 탭에서만 표시
   const heroBanner = document.getElementById("heroBanner");
   if (heroBanner) {
-    if (tabName === "classes") {
-      heroBanner.classList.remove("hidden");
-    } else {
-      heroBanner.classList.add("hidden");
-    }
+    if (tabName === "classes") heroBanner.classList.remove("hidden");
+    else heroBanner.classList.add("hidden");
   }
 
-  // 탭 전환 시 특수 처리
   if (tabName === "admin") {
     checkAdminAuthState();
   } else if (tabName === "board") {
@@ -105,23 +89,17 @@ function navigateTab(tabName) {
   }
 }
 
-/**
- * 히어로 배너 상단 통계 업데이트
- */
 function updateHeroStats() {
   const classes = AppState.classes || [];
   const totalClasses = classes.length;
   const totalApplicants = classes.reduce((sum, c) => sum + (c.currentApplied || 0), 0);
-  const availableClasses = classes.filter(c => !c.isFull && c.status !== "CLOSED").length;
+  const availableClasses = classes.filter(c => !c.isFull && c.status !== "CLOSED" && !c.isDeadlinePassed).length;
 
   document.getElementById("statTotalClasses").textContent = totalClasses;
   document.getElementById("statTotalApplicants").textContent = totalApplicants;
   document.getElementById("statAvailableClasses").textContent = availableClasses;
 }
 
-/**
- * 교과목 필터 버튼 동적 생성
- */
 function renderSubjectFilters() {
   const container = document.getElementById("subjectFilterContainer");
   if (!container) return;
@@ -143,18 +121,12 @@ function renderSubjectFilters() {
   }).join("");
 }
 
-/**
- * 교과목 필터 선택
- */
 function filterSubject(subject) {
   AppState.activeSubjectFilter = subject;
   renderSubjectFilters();
   renderClasses();
 }
 
-/**
- * 검색어 입력 처리
- */
 function handleClassSearch() {
   const input = document.getElementById("classSearchInput");
   if (input) {
@@ -163,9 +135,6 @@ function handleClassSearch() {
   }
 }
 
-/**
- * 로딩 스켈레톤 UI
- */
 function showLoadingSkeletons() {
   const grid = document.getElementById("classListGrid");
   if (!grid) return;
@@ -177,30 +146,21 @@ function showLoadingSkeletons() {
         <div class="h-5 w-20 bg-slate-200 rounded-full"></div>
       </div>
       <div class="h-6 w-3/4 bg-slate-200 rounded"></div>
-      <div class="space-y-2">
-        <div class="h-4 w-1/2 bg-slate-200 rounded"></div>
-        <div class="h-4 w-2/3 bg-slate-200 rounded"></div>
-      </div>
       <div class="h-10 bg-slate-200 rounded-xl"></div>
     </div>
   `).join("");
 }
 
-/**
- * 수업 카드 그리드 렌더링
- */
 function renderClasses() {
   const grid = document.getElementById("classListGrid");
   if (!grid) return;
 
   let list = AppState.classes || [];
 
-  // 1. 교과목 필터링
   if (AppState.activeSubjectFilter !== "ALL") {
     list = list.filter(c => c.subject === AppState.activeSubjectFilter);
   }
 
-  // 2. 키워드 검색 필터링
   if (AppState.searchQuery) {
     const q = AppState.searchQuery;
     list = list.filter(c => 
@@ -218,23 +178,26 @@ function renderClasses() {
           <i class="fa-solid fa-folder-open"></i>
         </div>
         <p class="text-sm font-semibold text-slate-700">개설된 수업이 없습니다.</p>
-        <p class="text-xs text-slate-400">다른 교과목 필터나 검색어를 시도해 보세요.</p>
       </div>
     `;
     return;
   }
 
   grid.innerHTML = list.map(item => {
-    const isClosed = item.status === "CLOSED" || item.isFull;
+    const isClosed = item.status === "CLOSED" || item.isFull || item.isDeadlinePassed;
     const capacity = item.capacity || 0;
     const current = item.currentApplied || 0;
     const isImminent = !isClosed && capacity > 0 && (capacity - current) <= 2;
 
     let badgeHtml = "";
-    if (isClosed) {
-      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-lock mr-1"></i>신청 마감</span>`;
+    if (item.status === "CLOSED") {
+      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-lock mr-1"></i>수동 마감</span>`;
+    } else if (item.isDeadlinePassed) {
+      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-clock-rotate-left mr-1"></i>기한 마감</span>`;
+    } else if (isClosed) {
+      badgeHtml = `<span class="badge-closed text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-user-xmark mr-1"></i>정원 마감</span>`;
     } else if (isImminent) {
-      badgeHtml = `<span class="badge-warning text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-fire mr-1"></i>마감 임박 (${capacity - current}석 남음)</span>`;
+      badgeHtml = `<span class="badge-warning text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-fire mr-1"></i>마감 임박 (${capacity - current}석)</span>`;
     } else {
       badgeHtml = `<span class="badge-available text-xs font-bold px-2.5 py-1 rounded-full"><i class="fa-solid fa-circle-check mr-1"></i>신청 가능</span>`;
     }
@@ -246,6 +209,13 @@ function renderClasses() {
       <a href="${item.fileUrl}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200/60 transition-colors">
         <i class="fa-solid fa-file-arrow-down"></i> ${item.fileName || "수업자료 다운로드"}
       </a>
+    ` : "";
+
+    const deadlineHtml = item.deadline ? `
+      <div class="flex items-center gap-1 text-[11px] text-slate-400">
+        <i class="fa-regular fa-calendar-check text-slate-400"></i>
+        <span>신청마감일시: <strong class="text-slate-600 font-semibold">${item.deadline}</strong></span>
+      </div>
     ` : "";
 
     return `
@@ -273,7 +243,7 @@ function renderClasses() {
               <i class="fa-solid fa-clock text-slate-400 w-4"></i>
               <span>${escapeHtml(item.dateTime)}</span>
             </div>
-              <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2">
               <i class="fa-solid fa-location-dot text-slate-400 w-4"></i>
               <span class="font-medium text-slate-700">${escapeHtml(item.location)}</span>
             </div>
@@ -286,10 +256,10 @@ function renderClasses() {
           ` : ""}
         </div>
 
-        <div class="space-y-4 pt-2 border-t border-slate-100">
+        <div class="space-y-3 pt-2 border-t border-slate-100">
           ${attachmentHtml}
+          ${deadlineHtml}
 
-          <!-- 신청 인원 현황 게이지 -->
           <div class="space-y-1">
             <div class="flex justify-between text-xs font-semibold">
               <span class="text-slate-500">참관 신청 현황</span>
@@ -302,7 +272,6 @@ function renderClasses() {
             ` : ""}
           </div>
 
-          <!-- 참관 신청 버튼 -->
           <button 
             onclick="openApplyModal('${item.id}')"
             ${isClosed ? "disabled" : ""}
@@ -319,9 +288,6 @@ function renderClasses() {
   }).join("");
 }
 
-/**
- * 참관 신청 모달 오픈
- */
 function openApplyModal(classId) {
   const item = AppState.classes.find(c => String(c.id) === String(classId));
   if (!item) return;
@@ -331,27 +297,19 @@ function openApplyModal(classId) {
   document.getElementById("modalClassTopic").textContent = item.topic;
   document.getElementById("modalClassTeacher").textContent = `${item.teacher} 선생님 | ${item.location}`;
 
-  // 폼 초기화
   document.getElementById("applyForm").reset();
 
   const modal = document.getElementById("applyModal");
   if (modal) modal.classList.remove("hidden");
 }
 
-/**
- * 참관 신청 모달 닫기
- */
 function closeApplyModal() {
   const modal = document.getElementById("applyModal");
   if (modal) modal.classList.add("hidden");
 }
 
-/**
- * 참관 신청 접수 제출 (API)
- */
 async function submitApplication(event) {
   event.preventDefault();
-  
   const submitBtn = document.getElementById("applySubmitBtn");
   const originalText = submitBtn.innerHTML;
   
@@ -369,11 +327,8 @@ async function submitApplication(event) {
     submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> 접수 처리 중...`;
 
     const res = await API.post("applyClass", payload);
-    
     showToast(res.message || "참관 신청이 정상 완료되었습니다!", "success");
     closeApplyModal();
-    
-    // 데이터 새로고침
     await loadInitialData();
   } catch (err) {
     showToast(`신청 실패: ${err.message}`, "error");
@@ -383,8 +338,186 @@ async function submitApplication(event) {
   }
 }
 
+/* ==================================================================
+ * 참관 신청 확인 / 수정 / 취소 기능
+ * ================================================================== */
+function openCheckApplyModal() {
+  const modal = document.getElementById("checkApplyModal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeCheckApplyModal() {
+  const modal = document.getElementById("checkApplyModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function closeMyApplyResultModal() {
+  const modal = document.getElementById("myApplyResultModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function handleCheckApplySubmit(event) {
+  event.preventDefault();
+  const name = document.getElementById("checkName").value.trim();
+  const phone = document.getElementById("checkPhone").value.trim();
+
+  if (!name || !phone) {
+    showToast("성명과 연락처를 입력해주세요.", "error");
+    return;
+  }
+
+  const submitBtn = document.getElementById("checkSubmitBtn");
+  const origText = submitBtn.innerHTML;
+
+  try {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 조회 중...`;
+
+    const list = await API.post("checkMyApplications", { applicantName: name, phone: phone });
+    AppState.myApplications = list || [];
+    AppState.currentCheckUser = { name, phone };
+
+    closeCheckApplyModal();
+    renderMyApplicationsResult();
+  } catch (err) {
+    showToast(`조회 실패: ${err.message}`, "error");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = origText;
+  }
+}
+
+function renderMyApplicationsResult() {
+  const modal = document.getElementById("myApplyResultModal");
+  const container = document.getElementById("myApplyListContainer");
+  if (!modal || !container) return;
+
+  modal.classList.remove("hidden");
+
+  const apps = AppState.myApplications || [];
+
+  if (apps.length === 0) {
+    container.innerHTML = `
+      <div class="p-8 text-center text-slate-500 space-y-2 border border-slate-200 rounded-xl">
+        <i class="fa-solid fa-circle-question text-3xl text-slate-300"></i>
+        <p class="text-sm font-semibold">입력하신 정보로 접수된 참관 신청 내역이 없습니다.</p>
+        <p class="text-xs text-slate-400">성명과 연락처를 다시 확인해 주세요.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = apps.map(a => `
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3" id="myAppCard-${a.classId}">
+      <div class="flex justify-between items-start">
+        <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+          신청 완료 (${a.timestamp})
+        </span>
+        <div class="flex gap-1">
+          <button onclick="toggleMyApplyEditForm('${a.classId}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold">
+            <i class="fa-solid fa-pen mr-1"></i> 수정
+          </button>
+          <button onclick="cancelMyApply('${a.classId}')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-xs font-semibold">
+            <i class="fa-solid fa-trash-can mr-1"></i> 신청 취소
+          </button>
+        </div>
+      </div>
+
+      <h4 class="text-sm font-bold text-slate-900">${escapeHtml(a.className)}</h4>
+
+      <!-- 기본 정보 보기 -->
+      <div id="myAppView-${a.classId}" class="space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
+        <p><strong>신청자:</strong> ${escapeHtml(a.applicantName)} (${escapeHtml(a.school)})</p>
+        <p><strong>연락처:</strong> ${escapeHtml(a.phone)} | <strong>이메일:</strong> ${escapeHtml(a.email || "미입력")}</p>
+        <p><strong>기대사항/비고:</strong> ${escapeHtml(a.remark || "없음")}</p>
+      </div>
+
+      <!-- 정보 수정 폼 (초기 숨김) -->
+      <form id="myAppEditForm-${a.classId}" onsubmit="saveMyApplyEdit(event, '${a.classId}')" class="hidden space-y-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">소속 학교명 *</label>
+          <input type="text" id="editSchool-${a.classId}" required value="${escapeHtml(a.school)}" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">이메일 주소</label>
+          <input type="email" id="editEmail-${a.classId}" value="${escapeHtml(a.email)}" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">참관 목적 / 비고</label>
+          <textarea id="editRemark-${a.classId}" rows="2" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg">${escapeHtml(a.remark)}</textarea>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="toggleMyApplyEditForm('${a.classId}')" class="px-3 py-1 bg-slate-200 text-slate-700 rounded font-semibold">취소</button>
+          <button type="submit" class="px-3 py-1 bg-emerald-600 text-white rounded font-semibold">저장하기</button>
+        </div>
+      </form>
+    </div>
+  `).join("");
+}
+
+function toggleMyApplyEditForm(classId) {
+  const viewEl = document.getElementById(`myAppView-${classId}`);
+  const editEl = document.getElementById(`myAppEditForm-${classId}`);
+  if (viewEl && editEl) {
+    viewEl.classList.toggle("hidden");
+    editEl.classList.toggle("hidden");
+  }
+}
+
+async function saveMyApplyEdit(event, classId) {
+  event.preventDefault();
+  const user = AppState.currentCheckUser;
+  
+  const payload = {
+    classId: classId,
+    applicantName: user.name,
+    phone: user.phone,
+    school: document.getElementById(`editSchool-${classId}`).value.trim(),
+    email: document.getElementById(`editEmail-${classId}`).value.trim(),
+    remark: document.getElementById(`editRemark-${classId}`).value.trim()
+  };
+
+  try {
+    const res = await API.post("updateMyApplication", payload);
+    showToast(res.message || "수정되었습니다.", "success");
+    
+    // 로컬 상태 업데이트 후 재렌더링
+    const target = AppState.myApplications.find(a => String(a.classId) === String(classId));
+    if (target) {
+      target.school = payload.school;
+      target.email = payload.email;
+      target.remark = payload.remark;
+    }
+    renderMyApplicationsResult();
+  } catch (err) {
+    showToast(`수정 실패: ${err.message}`, "error");
+  }
+}
+
+async function cancelMyApply(classId) {
+  if (!confirm("정말 이 수업의 참관 신청을 취소하시겠습니까?\n취소 후에는 선착순 정원이 해제됩니다.")) return;
+
+  const user = AppState.currentCheckUser;
+  const payload = {
+    classId: classId,
+    applicantName: user.name,
+    phone: user.phone
+  };
+
+  try {
+    const res = await API.post("cancelMyApplication", payload);
+    showToast(res.message || "신청이 취소되었습니다.", "success");
+    
+    AppState.myApplications = AppState.myApplications.filter(a => String(a.classId) !== String(classId));
+    renderMyApplicationsResult();
+    await loadInitialData();
+  } catch (err) {
+    showToast(`취소 실패: ${err.message}`, "error");
+  }
+}
+
 /**
- * 공지사항 로드 및 렌더링
+ * 공지사항 및 게시판 로직
  */
 async function loadNoticesData() {
   try {
@@ -403,11 +536,7 @@ function renderNotices() {
   const notices = AppState.notices || [];
 
   if (notices.length === 0) {
-    container.innerHTML = `
-      <div class="p-12 text-center text-slate-500 text-sm">
-        등록된 공지사항이 없습니다.
-      </div>
-    `;
+    container.innerHTML = `<div class="p-12 text-center text-slate-500 text-sm">등록된 공지사항이 없습니다.</div>`;
     return;
   }
 
@@ -420,11 +549,7 @@ function renderNotices() {
         </div>
         <span class="text-xs text-slate-400 shrink-0">${item.createdAt || ""}</span>
       </div>
-      
-      <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
-        ${escapeHtml(item.content)}
-      </p>
-
+      <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">${escapeHtml(item.content)}</p>
       ${item.fileUrl ? `
         <div class="pt-1">
           <a href="${item.fileUrl}" target="_blank" class="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1">
@@ -436,9 +561,6 @@ function renderNotices() {
   `).join("");
 }
 
-/**
- * 게시판 로드 및 렌더링
- */
 async function loadBoardData() {
   try {
     const list = await API.get("getBoard");
@@ -478,11 +600,7 @@ function renderBoard() {
   }
 
   if (list.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full bg-white p-12 rounded-2xl text-center text-slate-500 border border-slate-200 text-sm">
-        게시글이 없습니다. 첫 의견을 작성해보세요!
-      </div>
-    `;
+    container.innerHTML = `<div class="col-span-full bg-white p-12 rounded-2xl text-center text-slate-500 border border-slate-200 text-sm">게시글이 없습니다. 첫 의견을 작성해보세요!</div>`;
     return;
   }
 
@@ -498,12 +616,8 @@ function renderBoard() {
       </div>
 
       <div class="flex justify-between items-center pt-3 border-t border-slate-100 text-xs">
-        <span class="text-slate-500 font-medium">
-          <i class="fa-solid fa-user-circle text-slate-400 mr-1"></i> ${escapeHtml(item.author)} (${escapeHtml(item.school || "소속미입력")})
-        </span>
-        <button onclick="openBoardDeleteModal('${item.id}')" class="text-rose-500 hover:text-rose-700 font-semibold">
-          <i class="fa-solid fa-trash-can mr-1"></i> 삭제
-        </button>
+        <span class="text-slate-500 font-medium"><i class="fa-solid fa-user-circle text-slate-400 mr-1"></i> ${escapeHtml(item.author)} (${escapeHtml(item.school || "소속미입력")})</span>
+        <button onclick="openBoardDeleteModal('${item.id}')" class="text-rose-500 hover:text-rose-700 font-semibold"><i class="fa-solid fa-trash-can mr-1"></i> 삭제</button>
       </div>
     </div>
   `).join("");
@@ -578,9 +692,6 @@ async function confirmDeleteBoardPost() {
   }
 }
 
-/**
- * 토스트 메시지 출력 유틸리티
- */
 function showToast(message, type = "info") {
   const container = document.getElementById("toastContainer");
   if (!container) return;
@@ -591,15 +702,9 @@ function showToast(message, type = "info") {
     info: "bg-slate-800 text-white"
   };
 
-  const icons = {
-    success: '<i class="fa-solid fa-circle-check"></i>',
-    error: '<i class="fa-solid fa-circle-xmark"></i>',
-    info: '<i class="fa-solid fa-circle-info"></i>'
-  };
-
   const toast = document.createElement("div");
   toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 pointer-events-auto transition-all animate-scaleUp`;
-  toast.innerHTML = `${icons[type] || ""} <span>${escapeHtml(message)}</span>`;
+  toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
 
   container.appendChild(toast);
 
@@ -609,9 +714,6 @@ function showToast(message, type = "info") {
   }, 3500);
 }
 
-/**
- * XSS 방지 HTML escape 유틸리티
- */
 function escapeHtml(str) {
   if (!str) return "";
   return String(str)
