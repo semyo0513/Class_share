@@ -9,11 +9,8 @@
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
  */
 
-// Google 스프레드시트 ID (스프레드시트 URL의 /d/와 /edit 사이의 문자열)
-// 스프레드시트 내 [확장 프로그램] > [Apps Script]에서 생성한 경우는 빈값("")으로 두셔도 자동 연결됩니다.
 const SPREADSHEET_ID = "";
 
-// 글로벌 시트 이름 정의
 const SHEETS = {
   CLASSES: "Classes",
   APPLICATIONS: "Applications",
@@ -22,9 +19,6 @@ const SHEETS = {
   CONFIG: "Config"
 };
 
-/**
- * 활성화된 Google Spreadsheet 객체 안전 반환
- */
 function getSpreadsheet() {
   let ss = SpreadsheetApp.getActiveSpreadsheet();
   if (ss) return ss;
@@ -40,9 +34,6 @@ function getSpreadsheet() {
   throw new Error("Google 스프레드시트를 찾을 수 없습니다. 스프레드시트의 [확장 프로그램] > [Apps Script] 메뉴에서 스크립트를 생성 및 실행하시거나, Code.gs 상단의 SPREADSHEET_ID를 설정해주세요.");
 }
 
-/**
- * HTTP GET 요청 라우터 (데이터 조회)
- */
 function doGet(e) {
   const params = e ? e.parameter : {};
   const action = params.action;
@@ -61,7 +52,7 @@ function doGet(e) {
         return createJsonResponse(getBoardList());
       case "getAdminApplications":
         if (!verifyAdminPassword(params.adminPassword)) {
-          return createJsonResponse({ error: "관리자 인증에 실패하였습니다." }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패 (비밀번호 오류)" }, 401, false);
         }
         return createJsonResponse(getAllApplications());
       case "checkMyApplications":
@@ -74,9 +65,6 @@ function doGet(e) {
   }
 }
 
-/**
- * HTTP POST 요청 라우터
- */
 function doPost(e) {
   const lock = LockService.getScriptLock();
   
@@ -97,37 +85,34 @@ function doPost(e) {
     const action = postData.action;
 
     switch (action) {
-      // 1. 사용자 참관 신청
       case "applyClass":
         return createJsonResponse(handleApplyClass(postData.payload));
 
-      // 2. 사용자 참관 신청 조회
       case "checkMyApplications":
         return createJsonResponse(handleCheckMyApplications(postData.payload ? postData.payload.applicantName : "", postData.payload ? postData.payload.phone : ""));
 
-      // 3. 사용자 참관 신청 수정
       case "updateMyApplication":
         return createJsonResponse(handleUpdateMyApplication(postData.payload));
 
-      // 4. 사용자 참관 신청 취소
       case "cancelMyApplication":
         return createJsonResponse(handleCancelMyApplication(postData.payload));
 
-      // 5. 게시판 글 작성 / 삭제
       case "createBoardPost":
         return createJsonResponse(handleCreateBoardPost(postData.payload));
       case "deleteBoardPost":
         return createJsonResponse(handleDeleteBoardPost(postData.payload));
 
-      // 6. [관리자] 로그인
       case "adminLogin":
         const isValid = verifyAdminPassword(postData.adminPassword);
-        return createJsonResponse({ authorized: isValid }, isValid ? 200 : 401, isValid);
+        if (isValid) {
+          return createJsonResponse({ authorized: true, message: "관리자 로그인 성공" }, 200, true);
+        } else {
+          return createJsonResponse({ error: "관리자 비밀번호가 올바르지 않습니다." }, 401, false);
+        }
 
-      // 7. [관리자] 수업 저장 / 삭제 / 상태 토글
       case "saveClass":
         if (!verifyAdminPassword(postData.adminPassword)) {
-          return createJsonResponse({ error: "관리자 인증 실패 (비밀번호 오류)" }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패 (비밀번호가 일치하지 않습니다)" }, 401, false);
         }
         return createJsonResponse(handleSaveClass(postData.payload));
 
@@ -143,7 +128,6 @@ function doPost(e) {
         }
         return createJsonResponse(handleToggleClassStatus(postData.payload));
 
-      // 8. [관리자] 공지사항 저장 / 삭제
       case "saveNotice":
         if (!verifyAdminPassword(postData.adminPassword)) {
           return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
@@ -166,10 +150,6 @@ function doPost(e) {
   }
 }
 
-/* ==================================================================
- * 비즈니스 로직 함수군
- * ================================================================== */
-
 function getInitialData() {
   return {
     classes: getClassesList(),
@@ -178,9 +158,6 @@ function getInitialData() {
   };
 }
 
-/**
- * 수업 목록 조회 (마감 기한 및 실시간 신청인원 반영)
- */
 function getClassesList() {
   const ss = getSpreadsheet();
   let classSheet = ss.getSheetByName(SHEETS.CLASSES);
@@ -198,7 +175,6 @@ function getClassesList() {
   const rows = classData.slice(1);
   const now = new Date();
 
-  // Applications 시트에서 수업별 참관 신청 인원 계산 (CANCELLED 제외)
   const applyCountMap = {};
   if (appSheet) {
     const appData = appSheet.getDataRange().getValues();
@@ -257,16 +233,13 @@ function getClassesList() {
   return result;
 }
 
-/**
- * 참관 신청 접수
- */
 function handleApplyClass(payload) {
   if (!payload) throw new Error("신청 데이터가 전달되지 않았습니다.");
   
   const { applicantName, school, phone, email, classId, remark } = payload;
 
   if (!applicantName || !school || !phone || !classId) {
-    throw new Error("필수 입력 항목(성명, 소속학교, 연락처, 수업 선택)이 누락되었습니다.");
+    throw new Error("필수 입력 항목이 누락되었습니다.");
   }
 
   const isRegOpen = getConfigValue("IS_REGISTRATION_OPEN");
@@ -278,7 +251,6 @@ function handleApplyClass(payload) {
   const classSheet = ss.getSheetByName(SHEETS.CLASSES);
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
 
-  // 1. 대상 수업 검증
   const classRows = classSheet.getDataRange().getValues();
   let targetClass = null;
   for (let i = 1; i < classRows.length; i++) {
@@ -308,7 +280,6 @@ function handleApplyClass(payload) {
     }
   }
 
-  // 2. 중복 신청 검증 & 현재 신청자 수 체크 (CANCELLED 제외)
   const appRows = appSheet.getDataRange().getValues();
   let currentCount = 0;
   const cleanPhone = String(phone).replace(/[^0-9]/g, "");
@@ -332,7 +303,6 @@ function handleApplyClass(payload) {
     throw new Error("선착순 정원이 마감되어 신청할 수 없습니다.");
   }
 
-  // 3. 기록 저장
   const timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   appSheet.appendRow([
     timestamp,
@@ -353,9 +323,6 @@ function handleApplyClass(payload) {
   };
 }
 
-/**
- * 본인 참관 신청 내역 조회 (성명 + 연락처)
- */
 function handleCheckMyApplications(applicantName, phone) {
   if (!applicantName || !phone) {
     throw new Error("성명과 연락처를 모두 입력해주세요.");
@@ -396,9 +363,6 @@ function handleCheckMyApplications(applicantName, phone) {
   return result;
 }
 
-/**
- * 본인 참관 신청 내역 수정
- */
 function handleUpdateMyApplication(payload) {
   if (!payload || !payload.classId || !payload.phone || !payload.applicantName) {
     throw new Error("필수 정보가 누락되었습니다.");
@@ -426,9 +390,6 @@ function handleUpdateMyApplication(payload) {
   throw new Error("수정할 신청 내역을 찾을 수 없습니다.");
 }
 
-/**
- * 본인 참관 신청 취소 (status -> CANCELLED, 정원 회복)
- */
 function handleCancelMyApplication(payload) {
   if (!payload || !payload.classId || !payload.phone || !payload.applicantName) {
     throw new Error("취소할 신청 정보가 부족합니다.");
@@ -446,16 +407,13 @@ function handleCancelMyApplication(payload) {
 
     if (rowName === String(payload.applicantName).trim() && rowPhone === cleanInputPhone && rowClassId === String(payload.classId)) {
       appSheet.getRange(i + 1, 9).setValue("CANCELLED");
-      return { message: "참관 신청이 정상적으로 취소되었습니다. 정원이 1석 해제되었습니다." };
+      return { message: "참관 신청이 정상적으로 취소되었습니다." };
     }
   }
 
   throw new Error("취소하려는 참관 신청 내역을 찾지 못했습니다.");
 }
 
-/**
- * [관리자] 수업 상태 수동 토글 (ACTIVE <-> CLOSED)
- */
 function handleToggleClassStatus(payload) {
   if (!payload || !payload.classId) throw new Error("수업 ID가 필요합니다.");
 
@@ -475,9 +433,6 @@ function handleToggleClassStatus(payload) {
   throw new Error("수업을 찾을 수 없습니다.");
 }
 
-/**
- * [관리자] 수업 저장 (마감기한 deadline 포함)
- */
 function handleSaveClass(payload) {
   if (!payload) throw new Error("수업 저장 데이터가 없습니다.");
 
@@ -773,8 +728,13 @@ function getConfigValue(key) {
 
 function verifyAdminPassword(inputPassword) {
   if (!inputPassword) return false;
-  const defaultHash = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
-  const storedHash = getConfigValue("ADMIN_PASSWORD_HASH") || defaultHash;
+  // admin1234! 의 SHA-256 해시값 (b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd)
+  const defaultHash = "b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd";
+  let storedHash = getConfigValue("ADMIN_PASSWORD_HASH");
+  
+  if (!storedHash || storedHash.trim() === "" || storedHash === "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3") {
+    storedHash = defaultHash;
+  }
   const inputHash = computeSha256(inputPassword);
   return storedHash === inputHash;
 }
@@ -833,7 +793,7 @@ function initDatabaseSheets() {
   if (!configSheet) {
     configSheet = ss.insertSheet(SHEETS.CONFIG);
     configSheet.appendRow(["Key", "Value", "Description"]);
-    configSheet.appendRow(["ADMIN_PASSWORD_HASH", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3", "관리자 비밀번호 SHA-256 해시 (기본: admin1234!)"]);
+    configSheet.appendRow(["ADMIN_PASSWORD_HASH", "b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd", "관리자 비밀번호 SHA-256 해시 (기본: admin1234!)"]);
     configSheet.appendRow(["EVENT_TITLE", "2026 삼현 수업나눔한마당", "행사 메인 제목"]);
     configSheet.appendRow(["IS_REGISTRATION_OPEN", "TRUE", "참관 신청 가능 여부 (TRUE/FALSE)"]);
     configSheet.appendRow(["DRIVE_FOLDER_ID", "", "첨부파일이 업로드될 Google Drive 폴더 ID"]);

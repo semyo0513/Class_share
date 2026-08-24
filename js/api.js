@@ -31,51 +31,10 @@ function getInitialMockStore() {
         status: "ACTIVE",
         createdAt: "2026-08-20 09:00:00",
         deadline: "2026-10-14 18:00:00"
-      },
-      {
-        id: "CLS-2026-002",
-        subject: "수학",
-        teacher: "박민우",
-        gradeGroup: "2학년 5반",
-        dateTime: "2026-10-15 14:30 ~ 15:20 (6교시)",
-        location: "2층 수학선진화실",
-        topic: "지오지브라(GeoGebra) 기반 이차함수 그래프의 실생활 탐구",
-        description: "동적 공학 도구를 활용해 실생활 건축물에 숨겨진 이차함수를 시각화하고 탐구 발표를 진행합니다.",
-        capacity: 10,
-        currentApplied: 10,
-        isFull: true,
-        fileUrl: "",
-        fileName: "",
-        status: "ACTIVE",
-        createdAt: "2026-08-21 11:30:00",
-        deadline: "2026-10-14 18:00:00"
       }
     ],
-    applications: [
-      {
-        rowNum: 2,
-        timestamp: "2026-08-24 09:10:00",
-        applicantName: "홍길동",
-        school: "진주고등학교",
-        phone: "010-1234-5678",
-        email: "hong@gne.go.kr",
-        classId: "CLS-2026-001",
-        className: "[국어] AI 도구를 활용한 논증문 작성 및 상호 피드백 수업 (김수현 선생님)",
-        remark: "AI 피드백 도입 방식이 궁금합니다.",
-        status: "CONFIRMED"
-      }
-    ],
-    notices: [
-      {
-        id: "NOT-001",
-        createdAt: "2026-08-20 09:00:00",
-        title: "📢 2026 삼현 수업나눔한마당 개최 안내 및 참관 신청 방법",
-        content: "선생님 여러분 안녕하십니까?\n2026 삼현 수업나눔한마당이 10월 15일~16일 진행됩니다.",
-        isPinned: true,
-        author: "행사운영본부",
-        fileUrl: ""
-      }
-    ],
+    applications: [],
+    notices: [],
     board: [],
     config: {
       EVENT_TITLE: "2026 삼현 수업나눔한마당",
@@ -106,10 +65,10 @@ const API = {
         const res = await fetch(url.toString(), { method: "GET" });
         const json = await res.json();
         if (json.success) return json.data;
-        throw new Error(json.data?.error || json.message || "구글 시트 데이터 조회 실패");
+        throw new Error(json.data?.error || json.error || json.message || "구글 시트 데이터 조회 실패");
       } catch (err) {
         console.error(`[GAS GET ${action} 통신 실패]`, err);
-        throw new Error(`Google 시트 연동 오류: ${err.message}. Apps Script 웹앱의 '새 버전 배포' 및 '모든 사용자' 액세스 권한 설정을 확인하세요.`);
+        throw err;
       }
     }
     return this.getMock(action, params);
@@ -134,10 +93,11 @@ const API = {
         }
 
         if (json.success) return json.data;
-        throw new Error(json.data?.error || json.message || "구글 시트 저장 처리 실패");
+        const errMsg = json.data?.error || json.error || json.message || "구글 시트 처리 실패";
+        throw new Error(errMsg);
       } catch (err) {
         console.error(`[GAS POST ${action} 통신 실패]`, err);
-        throw new Error(`Google 시트 저장 실패: ${err.message}`);
+        throw err;
       }
     }
     return this.postMock(action, payload, adminPassword);
@@ -256,7 +216,7 @@ const API = {
         }
 
         saveMockStore(store);
-        return { message: "참관 신청이 정상 취소되었습니다. 정원이 1석 해제되었습니다." };
+        return { message: "참관 신청이 정상 취소되었습니다." };
       }
 
       case "toggleClassStatus": {
