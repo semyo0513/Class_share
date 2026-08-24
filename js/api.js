@@ -38,7 +38,8 @@ function getInitialMockStore() {
     board: [],
     config: {
       EVENT_TITLE: "2026 삼현 수업나눔한마당",
-      IS_REGISTRATION_OPEN: "TRUE"
+      IS_REGISTRATION_OPEN: "TRUE",
+      DRIVE_FOLDER_ID: ""
     }
   };
 
@@ -114,6 +115,8 @@ const API = {
         return store.notices;
       case "getBoard":
         return store.board;
+      case "getConfig":
+        return store.config;
       case "getAdminApplications":
         if (params.adminPassword !== CONFIG.DEMO_ADMIN_PASSWORD) {
           throw new Error("관리자 비밀번호가 올바르지 않습니다.");
@@ -284,6 +287,11 @@ const API = {
         const nowStr = new Date().toLocaleString("sv-SE").replace("T", " ");
         const noticeId = payload.id || `NOT-${Date.now().toString().slice(-6)}`;
 
+        let fileUrl = payload.fileUrl || "";
+        if (payload.fileData) {
+          fileUrl = "https://example.com/demo_uploaded_notice_" + encodeURIComponent(payload.fileData.name);
+        }
+
         const noticeObj = {
           id: noticeId,
           createdAt: nowStr,
@@ -291,7 +299,7 @@ const API = {
           content: payload.content,
           isPinned: !!payload.isPinned,
           author: payload.author || "행사운영본부",
-          fileUrl: payload.fileUrl || ""
+          fileUrl: fileUrl
         };
 
         const idx = store.notices.findIndex(n => String(n.id) === String(noticeId));
@@ -311,6 +319,13 @@ const API = {
 
       case "createBoardPost": {
         const nowStr = new Date().toLocaleString("sv-SE").replace("T", " ");
+        let fileUrl = payload.fileUrl || "";
+        let fileName = payload.fileName || "";
+        if (payload.fileData) {
+          fileName = payload.fileData.name;
+          fileUrl = "https://example.com/demo_uploaded_board_" + encodeURIComponent(fileName);
+        }
+
         store.board.unshift({
           id: `BRD-${Date.now().toString().slice(-6)}`,
           createdAt: nowStr,
@@ -319,7 +334,10 @@ const API = {
           title: payload.title,
           content: payload.content,
           password: payload.password,
-          category: payload.category || "자유소통"
+          category: payload.category || "자유소통",
+          isSecret: !!payload.isSecret,
+          fileUrl: fileUrl,
+          fileName: fileName
         });
         saveMockStore(store);
         return { message: "게시글이 등록되었습니다." };
@@ -334,6 +352,13 @@ const API = {
         store.board = store.board.filter(b => String(b.id) !== String(payload.postId));
         saveMockStore(store);
         return { message: "게시글이 삭제되었습니다." };
+      }
+
+      case "saveConfig": {
+        if (adminPassword !== CONFIG.DEMO_ADMIN_PASSWORD) throw new Error("관리자 권한이 필요합니다.");
+        store.config[payload.key] = payload.value;
+        saveMockStore(store);
+        return { message: `[${payload.key}] 설정이 저장되었습니다.` };
       }
 
       default:

@@ -3,6 +3,7 @@
  * 🏫 삼현 수업나눔한마당 통합 API 백엔드 (Google Apps Script)
  * ==================================================================
  * - Google Sheets (DB) 연동 및 Google Drive (파일 저장) 연동
+ * - Config 시트에서 지정한 DRIVE_FOLDER_ID 구글 드라이브 폴더 자동 연결
  * - LockService를 통한 동시 신청 정원 초과(Overbooking) 방지
  * - SHA-256 해시 기반 관리자 및 게시글 비밀번호 인증
  * - 참관 신청 조회 / 수정 / 취소 API 지원
@@ -51,6 +52,8 @@ function doGet(e) {
         return createJsonResponse(getNoticesList());
       case "getBoard":
         return createJsonResponse(getBoardList(params.adminPassword));
+      case "getConfig":
+        return createJsonResponse(getConfigMap());
       case "getAdminApplications":
         if (!verifyAdminPassword(params.adminPassword)) {
           return createJsonResponse({ error: "관리자 인증 실패 (비밀번호 오류)" }, 401, false);
@@ -140,6 +143,12 @@ function doPost(e) {
           return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
         }
         return createJsonResponse(handleDeleteNotice(postData.noticeId));
+
+      case "saveConfig":
+        if (!verifyAdminPassword(postData.adminPassword)) {
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
+        }
+        return createJsonResponse(handleSaveConfig(postData.payload));
 
       default:
         return createJsonResponse({ error: "올바르지 않은 POST Action입니다." }, 400, false);
@@ -451,17 +460,7 @@ function handleSaveClass(payload) {
 
   if (payload.fileData && payload.fileData.base64) {
     try {
-      const folderId = getConfigValue("DRIVE_FOLDER_ID");
-      let targetFolder = DriveApp.getRootFolder();
-      
-      if (folderId && folderId.trim() !== "") {
-        try {
-          targetFolder = DriveApp.getFolderById(folderId.trim());
-        } catch (e) {
-          Logger.log("지정된 폴더를 찾을 수 없어 루트 폴더에 저장합니다: " + e.toString());
-        }
-      }
-      
+      const targetFolder = getTargetDriveFolder();
       const contentType = payload.fileData.mimeType || "application/octet-stream";
       const base64Str = payload.fileData.base64.includes(",") 
         ? payload.fileData.base64.split(",")[1] 
@@ -574,17 +573,7 @@ function handleSaveNotice(payload) {
 
   if (payload.fileData && payload.fileData.base64) {
     try {
-      const folderId = getConfigValue("DRIVE_FOLDER_ID");
-      let targetFolder = DriveApp.getRootFolder();
-      
-      if (folderId && folderId.trim() !== "") {
-        try {
-          targetFolder = DriveApp.getFolderById(folderId.trim());
-        } catch (e) {
-          Logger.log("지정된 폴더를 찾을 수 없어 루트 폴더에 저장합니다: " + e.toString());
-        }
-      }
-      
+      const targetFolder = getTargetDriveFolder();
       const contentType = payload.fileData.mimeType || "application/octet-stream";
       const base64Str = payload.fileData.base64.includes(",") 
         ? payload.fileData.base64.split(",")[1] 
@@ -647,9 +636,6 @@ function handleDeleteNotice(noticeId) {
   throw new Error("삭제할 공지사항을 찾지 못했습니다.");
 }
 
-/**
- * 게시판 Q&A 목록 조회 (비밀글 권한 제어 포함)
- */
 function getBoardList(adminPassword) {
   const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.BOARD);
@@ -681,9 +667,6 @@ function getBoardList(adminPassword) {
   }).reverse();
 }
 
-/**
- * 게시판 글 작성 (비밀글 및 구글 드라이브 파일 업로드)
- */
 function handleCreateBoardPost(payload) {
   if (!payload || !payload.title || !payload.content || !payload.author || !payload.password) {
     throw new Error("성명, 비밀번호, 제목, 내용은 필수 입력 항목입니다.");
@@ -705,17 +688,7 @@ function handleCreateBoardPost(payload) {
 
   if (payload.fileData && payload.fileData.base64) {
     try {
-      const folderId = getConfigValue("DRIVE_FOLDER_ID");
-      let targetFolder = DriveApp.getRootFolder();
-      
-      if (folderId && folderId.trim() !== "") {
-        try {
-          targetFolder = DriveApp.getFolderById(folderId.trim());
-        } catch (e) {
-          Logger.log("지정된 폴더를 찾을 수 없어 루트 폴더에 저장합니다: " + e.toString());
-        }
-      }
-      
+      const targetFolder = getTargetDriveFolder();
       const contentType = payload.fileData.mimeType || "application/octet-stream";
       const base64Str = payload.fileData.base64.includes(",") 
         ? payload.fileData.base64.split(",")[1] 
@@ -822,6 +795,69 @@ function getConfigValue(key) {
   return configMap[key] || null;
 }
 
+function handleSaveConfig(payload) {
+  if (!payload || !payload.key) throw new Error("설정 키(Key)가 지정되지 않았습니다.");
+
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName(SHEETS.CONFIG);
+  if (!sheet) {
+    initDatabaseSheets();
+    sheet = ss.getSheetByName(SHEETS.CONFIG);
+  }
+
+  const rows = sheet.getDataRange().getValues();
+  const targetKey = String(payload.key).trim();
+  const targetVal = String(payload.value || "").trim();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === targetKey) {
+      sheet.getRange(i + 1, 2).setValue(targetVal);
+      return { message: `[${targetKey}] 설정이 구글 시트에 변경되었습니다.`, key: targetKey, value: targetVal };
+    }
+  }
+
+  sheet.appendRow([targetKey, targetVal, payload.description || ""]);
+  return { message: `[${targetKey}] 설정이 구글 시트에 등록되었습니다.`, key: targetKey, value: targetVal };
+}
+
+/**
+ * 구글 드라이브 폴더 ID 파싱 (URL 전체 입력 시 자동으로 폴더 ID 추출)
+ */
+function parseDriveFolderId(input) {
+  if (!input) return "";
+  const raw = String(input).trim();
+
+  const urlMatch = raw.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1];
+  }
+
+  const idParamMatch = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idParamMatch && idParamMatch[1]) {
+    return idParamMatch[1];
+  }
+
+  return raw;
+}
+
+/**
+ * Config 시트에 설정된 DRIVE_FOLDER_ID 구글 드라이브 폴더 객체 반환
+ */
+function getTargetDriveFolder() {
+  const rawFolderVal = getConfigValue("DRIVE_FOLDER_ID");
+  const folderId = parseDriveFolderId(rawFolderVal);
+
+  if (folderId && folderId !== "") {
+    try {
+      return DriveApp.getFolderById(folderId);
+    } catch (e) {
+      Logger.log(`[DRIVE_FOLDER_ID Error] 지정된 폴더 ID(${folderId})를 찾을 수 없어 루트 폴더에 저장합니다: ${e.toString()}`);
+    }
+  }
+
+  return DriveApp.getRootFolder();
+}
+
 function verifyAdminPassword(inputPassword) {
   if (!inputPassword) return false;
   const defaultHash = "b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd";
@@ -891,6 +927,6 @@ function initDatabaseSheets() {
     configSheet.appendRow(["ADMIN_PASSWORD_HASH", "b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd", "관리자 비밀번호 SHA-256 해시 (기본: admin1234!)"]);
     configSheet.appendRow(["EVENT_TITLE", "2026 삼현 수업나눔한마당", "행사 메인 제목"]);
     configSheet.appendRow(["IS_REGISTRATION_OPEN", "TRUE", "참관 신청 가능 여부 (TRUE/FALSE)"]);
-    configSheet.appendRow(["DRIVE_FOLDER_ID", "", "첨부파일이 업로드될 Google Drive 폴더 ID"]);
+    configSheet.appendRow(["DRIVE_FOLDER_ID", "", "첨부파일이 업로드될 Google Drive 폴더 ID (또는 전체 URL 주소)"]);
   }
 }

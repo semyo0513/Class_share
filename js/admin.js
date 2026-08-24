@@ -8,7 +8,8 @@ const AdminState = {
   isLoggedIn: false,
   adminPassword: "",
   activeSubTab: "classes",
-  applications: []
+  applications: [],
+  config: {}
 };
 
 function checkAdminAuthState() {
@@ -78,7 +79,7 @@ function renderAdminDashboard() {
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4">
         <div>
           <h2 class="text-xl font-bold text-slate-900">관리자 대시보드</h2>
-          <p class="text-xs text-slate-500">수업 개설, 참관 신청자 명단 관리, 공지사항을 통합 관리합니다.</p>
+          <p class="text-xs text-slate-500">수업 개설, 참관 신청자 명단, 공지사항, 구글 드라이브 환경 설정을 통합 관리합니다.</p>
         </div>
         <button onclick="handleAdminLogout()" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold">
           <i class="fa-solid fa-right-from-bracket mr-1"></i> 로그아웃
@@ -94,6 +95,9 @@ function renderAdminDashboard() {
         </button>
         <button onclick="switchAdminSubTab('notices')" id="adminSubTab-notices" class="admin-subtab px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
           <i class="fa-solid fa-bullhorn mr-1"></i> 공지사항 관리
+        </button>
+        <button onclick="switchAdminSubTab('config')" id="adminSubTab-config" class="admin-subtab px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+          <i class="fa-solid fa-gear mr-1"></i> 드라이브/환경 설정
         </button>
       </div>
 
@@ -125,6 +129,8 @@ function switchAdminSubTab(subTab) {
     renderAdminApplicantsView();
   } else if (subTab === "notices") {
     renderAdminNoticesView();
+  } else if (subTab === "config") {
+    renderAdminConfigView();
   }
 }
 
@@ -630,7 +636,7 @@ function printApplicantsList() {
 }
 
 /* ==================================================================
- * 3. 공지사항 관리 서브 탭 (첨부파일 업로드 지원)
+ * 3. 공지사항 관리 서브 탭
  * ================================================================== */
 function renderAdminNoticesView() {
   const container = document.getElementById("adminSubContent");
@@ -772,6 +778,120 @@ async function deleteAdminNotice(noticeId) {
     renderAdminNoticesView();
   } catch (err) {
     showToast(err.message, "error");
+  }
+}
+
+/* ==================================================================
+ * 4. 환경 설정 서브 탭 (구글 드라이브 폴더 ID 설정 등)
+ * ================================================================== */
+async function renderAdminConfigView() {
+  const container = document.getElementById("adminSubContent");
+  container.innerHTML = `<div class="p-8 text-center text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i> 구글 시트 설정을 불러오는 중...</div>`;
+
+  try {
+    const configMap = await API.get("getConfig");
+    AdminState.config = configMap || {};
+    const driveFolderId = AdminState.config.DRIVE_FOLDER_ID || "";
+    const eventTitle = AdminState.config.EVENT_TITLE || "2026 삼현 수업나눔한마당";
+    const isRegOpen = (AdminState.config.IS_REGISTRATION_OPEN || "TRUE").toUpperCase() === "TRUE";
+
+    container.innerHTML = `
+      <div class="space-y-6 max-w-2xl">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 mb-1">⚙️ 시스템 환경 설정</h3>
+          <p class="text-xs text-slate-500">구글 시트의 <code class="bg-slate-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono">Config</code> 탭에 지정되는 설정입니다. 웹사이트 및 구글 시트 양쪽에서 모두 변경할 수 있습니다.</p>
+        </div>
+
+        <form onsubmit="saveDriveFolderConfig(event)" class="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-4 text-xs">
+          <div>
+            <label class="block font-bold text-indigo-900 mb-1 flex items-center gap-1.5">
+              <i class="fa-fab fa-google-drive text-indigo-600 text-sm"></i> 구글 드라이브 업로드 폴더 ID (또는 전체 URL)
+            </label>
+            <p class="text-[11px] text-slate-500 mb-2 leading-relaxed">
+              수업지도안, 공지사항, 게시판 Q&A 파일 업로드 시 파일이 생성되는 Google Drive 폴더입니다.<br>
+              💡 구글 드라이브 폴더 주소 URL 전체(예: <code class="bg-white px-1 border text-slate-700">https://drive.google.com/drive/folders/1a2b3c...</code>)를 그대로 넣으셔도 자동으로 폴더 ID가 추출됩니다.
+            </p>
+            <input type="text" id="adminDriveFolderInput" value="${escapeHtml(driveFolderId)}" placeholder="예: 1a2b3c4d5e... 또는 https://drive.google.com/drive/folders/..." class="w-full px-3.5 py-2.5 border border-indigo-200 rounded-xl text-xs bg-white font-mono focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <div class="flex justify-between items-center pt-2">
+            <span class="text-[11px] text-slate-400">구글 시트 <code class="text-slate-600 font-mono">Config</code> 시트 5행 2열(B5) 값과 자동 연동됩니다.</span>
+            <button type="submit" id="saveDriveFolderBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow transition-all">
+              폴더 ID 저장하기
+            </button>
+          </div>
+        </form>
+
+        <form onsubmit="saveEventTitleConfig(event)" class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 text-xs">
+          <div>
+            <label class="block font-bold text-slate-800 mb-1">행사 메인 타이틀 명칭</label>
+            <input type="text" id="adminEventTitleInput" value="${escapeHtml(eventTitle)}" required class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" id="saveEventTitleBtn" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold shadow">
+              행사명 저장
+            </button>
+          </div>
+        </form>
+
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-2">
+          <h4 class="font-bold text-slate-800">📊 구글 스프레드시트 직관적 수정 안내</h4>
+          <p class="text-slate-600 leading-relaxed">
+            웹사이트 관리자 화면 외에도 연결된 <strong>Google 스프레드시트</strong>의 <strong><code class="bg-white border text-indigo-700 px-1 font-bold">Config</code> 탭</strong>에서 직접 값을 변경하실 수 있습니다:
+          </p>
+          <ul class="list-disc list-inside text-slate-500 space-y-1 pl-1">
+            <li><strong>DRIVE_FOLDER_ID (B행 5열)</strong>: 구글 드라이브 폴더 ID (또는 전체 URL)</li>
+            <li><strong>EVENT_TITLE (B행 3열)</strong>: 행사 타이틀 명칭</li>
+            <li><strong>IS_REGISTRATION_OPEN (B행 4열)</strong>: <code class="font-bold text-emerald-600">TRUE</code> (신청가능) / <code class="font-bold text-rose-600">FALSE</code> (신청차단)</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div class="p-8 text-center text-rose-600 font-bold">설정 데이터 로드 실패: ${err.message}</div>`;
+  }
+}
+
+async function saveDriveFolderConfig(event) {
+  event.preventDefault();
+  const inputVal = document.getElementById("adminDriveFolderInput").value.trim();
+  const btn = document.getElementById("saveDriveFolderBtn");
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 저장 중...`;
+
+    const res = await API.post("saveConfig", { key: "DRIVE_FOLDER_ID", value: inputVal, description: "첨부파일이 업로드될 Google Drive 폴더 ID" }, AdminState.adminPassword);
+    showToast(res.message || "구글 드라이브 폴더 ID가 저장되었습니다.", "success");
+    await loadInitialData();
+    renderAdminConfigView();
+  } catch (err) {
+    showToast(`저장 실패: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `폴더 ID 저장하기`;
+  }
+}
+
+async function saveEventTitleConfig(event) {
+  event.preventDefault();
+  const inputVal = document.getElementById("adminEventTitleInput").value.trim();
+  const btn = document.getElementById("saveEventTitleBtn");
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 저장 중...`;
+
+    const res = await API.post("saveConfig", { key: "EVENT_TITLE", value: inputVal, description: "행사 메인 제목" }, AdminState.adminPassword);
+    showToast(res.message || "행사 타이틀이 저장되었습니다.", "success");
+    await loadInitialData();
+    renderAdminConfigView();
+  } catch (err) {
+    showToast(`저장 실패: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `행사명 저장`;
   }
 }
 
