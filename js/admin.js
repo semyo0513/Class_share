@@ -299,7 +299,6 @@ function openClassFormModal(classId = null) {
             </div>
           </div>
 
-          <!-- 수업 일시 (클릭 선택 피커 UI) -->
           <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 space-y-3">
             <label class="block font-bold text-indigo-900 flex items-center gap-1.5">
               <i class="fa-regular fa-calendar-days text-indigo-600"></i> 수업 일시 선택 *
@@ -347,7 +346,6 @@ function openClassFormModal(classId = null) {
               <input type="number" id="formClassCapacity" min="0" required value="${item ? item.capacity : 15}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
             </div>
 
-            <!-- 마감 기한 (클릭 선택 datetime-local 피커 UI) -->
             <div>
               <label class="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <i class="fa-regular fa-clock text-amber-600"></i> 참관 신청 마감 일시 (클릭 선택)
@@ -404,7 +402,6 @@ async function saveAdminClass(event) {
     }
   }
 
-  // 클릭 피커 입력값 결합
   const classDate = document.getElementById("formClassDate").value;
   const startTime = document.getElementById("formClassStartTime").value;
   const endTime = document.getElementById("formClassEndTime").value;
@@ -633,7 +630,7 @@ function printApplicantsList() {
 }
 
 /* ==================================================================
- * 3. 공지사항 관리 서브 탭
+ * 3. 공지사항 관리 서브 탭 (첨부파일 업로드 지원)
  * ================================================================== */
 function renderAdminNoticesView() {
   const container = document.getElementById("adminSubContent");
@@ -657,6 +654,13 @@ function renderAdminNoticesView() {
                 <h4 class="text-sm font-bold text-slate-900">${escapeHtml(n.title)}</h4>
               </div>
               <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(n.content)}</p>
+              ${n.fileUrl ? `
+                <div class="pt-1 text-[11px] text-indigo-600 font-medium">
+                  <a href="${n.fileUrl}" target="_blank" class="hover:underline inline-flex items-center gap-1">
+                    <i class="fa-solid fa-paperclip"></i> 첨부파일 보기
+                  </a>
+                </div>
+              ` : ""}
             </div>
             <div class="flex gap-1 shrink-0">
               <button onclick="openNoticeFormModal('${n.id}')" class="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold">수정</button>
@@ -690,6 +694,15 @@ function openNoticeFormModal(noticeId = null) {
             <label class="block font-semibold text-slate-700 mb-1">내용 *</label>
             <textarea id="formNoticeContent" rows="5" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">${item ? escapeHtml(item.content) : ""}</textarea>
           </div>
+
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+            <label class="block font-semibold text-slate-700">공지 첨부파일 업로드 (Google Drive 저장)</label>
+            <input type="file" id="formNoticeFileInput" class="w-full text-xs text-slate-500">
+            ${item && item.fileUrl ? `
+              <p class="text-[11px] text-indigo-600">현재 등록된 파일: <a href="${item.fileUrl}" target="_blank" class="underline"><i class="fa-solid fa-paperclip"></i> 기존 첨부파일 보기</a></p>
+            ` : ""}
+          </div>
+
           <div class="flex items-center gap-2">
             <input type="checkbox" id="formNoticePinned" ${item && item.isPinned ? "checked" : ""} class="rounded text-indigo-600 focus:ring-indigo-500">
             <label for="formNoticePinned" class="font-semibold text-slate-700">목록 상단에 고정 표시</label>
@@ -711,11 +724,25 @@ async function saveAdminNotice(event) {
   const btn = document.getElementById("saveNoticeSubmitBtn");
   const orig = btn.innerHTML;
 
+  const fileInput = document.getElementById("formNoticeFileInput");
+  let fileData = null;
+
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    try {
+      fileData = await readFileAsBase64(file);
+    } catch (e) {
+      showToast("파일 인코딩 오류가 발생했습니다.", "error");
+      return;
+    }
+  }
+
   const payload = {
     id: document.getElementById("formNoticeId").value || null,
     title: document.getElementById("formNoticeTitle").value.trim(),
     content: document.getElementById("formNoticeContent").value.trim(),
-    isPinned: document.getElementById("formNoticePinned").checked
+    isPinned: document.getElementById("formNoticePinned").checked,
+    fileData: fileData
   };
 
   try {

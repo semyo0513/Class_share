@@ -7,6 +7,7 @@
  * - SHA-256 해시 기반 관리자 및 게시글 비밀번호 인증
  * - 참관 신청 조회 / 수정 / 취소 API 지원
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
+ * - 수업지도안 및 공지사항 구글 드라이브 첨부파일 업로드 지원
  */
 
 const SPREADSHEET_ID = "";
@@ -475,7 +476,7 @@ function handleSaveClass(payload) {
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
     } catch (fileErr) {
-      throw new Error("파일 업로드 오류: " + fileErr.toString());
+      throw new Error("수업자료 구글 드라이브 파일 업로드 오류: " + fileErr.toString());
     }
   }
 
@@ -562,8 +563,45 @@ function handleSaveNotice(payload) {
   if (!payload) throw new Error("공지사항 데이터가 없습니다.");
 
   const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.NOTICES);
+  let sheet = ss.getSheetByName(SHEETS.NOTICES);
+  if (!sheet) {
+    initDatabaseSheets();
+    sheet = ss.getSheetByName(SHEETS.NOTICES);
+  }
+
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  let fileUrl = payload.fileUrl || "";
+
+  // 공지사항 구글 드라이브 첨부파일 업로드
+  if (payload.fileData && payload.fileData.base64) {
+    try {
+      const folderId = getConfigValue("DRIVE_FOLDER_ID");
+      let targetFolder = DriveApp.getRootFolder();
+      
+      if (folderId && folderId.trim() !== "") {
+        try {
+          targetFolder = DriveApp.getFolderById(folderId.trim());
+        } catch (e) {
+          Logger.log("지정된 폴더를 찾을 수 없어 루트 폴더에 저장합니다: " + e.toString());
+        }
+      }
+      
+      const contentType = payload.fileData.mimeType || "application/octet-stream";
+      const base64Str = payload.fileData.base64.includes(",") 
+        ? payload.fileData.base64.split(",")[1] 
+        : payload.fileData.base64;
+      
+      const decodedBytes = Utilities.base64Decode(base64Str);
+      const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
+      
+      const file = targetFolder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
+      fileUrl = file.getUrl();
+    } catch (fileErr) {
+      throw new Error("공지사항 첨부파일 구글 드라이브 업로드 오류: " + fileErr.toString());
+    }
+  }
 
   const noticeId = payload.id || `NOT-${Date.now().toString().slice(-6)}`;
   const rows = sheet.getDataRange().getValues();
@@ -583,7 +621,7 @@ function handleSaveNotice(payload) {
     payload.content || "",
     payload.isPinned ? "TRUE" : "FALSE",
     payload.author || "행사운영본부",
-    payload.fileUrl || ""
+    fileUrl
   ];
 
   if (foundRowIndex > 0) {
@@ -592,7 +630,7 @@ function handleSaveNotice(payload) {
     sheet.appendRow(rowData);
   }
 
-  return { message: "공지사항이 정상적으로 저장되었습니다.", noticeId: noticeId };
+  return { message: "공지사항이 구글 드라이브 첨부파일과 함께 정상 저장되었습니다.", noticeId: noticeId };
 }
 
 function handleDeleteNotice(noticeId) {
@@ -728,7 +766,6 @@ function getConfigValue(key) {
 
 function verifyAdminPassword(inputPassword) {
   if (!inputPassword) return false;
-  // admin1234! 의 SHA-256 해시값 (b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd)
   const defaultHash = "b0d107a1cb94cd60c513a8636f99b8d700154887e2a96f0310a1b5f3e60a6ddd";
   let storedHash = getConfigValue("ADMIN_PASSWORD_HASH");
   
