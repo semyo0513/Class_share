@@ -150,6 +150,7 @@ function renderAdminClassesView() {
             <tr>
               <th class="p-3">ID / 교과</th>
               <th class="p-3">수업자 / 장소</th>
+              <th class="p-3">수업 일시</th>
               <th class="p-3">수업 주제</th>
               <th class="p-3">신청/정원</th>
               <th class="p-3">신청 마감 기한</th>
@@ -158,7 +159,7 @@ function renderAdminClassesView() {
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${classes.length === 0 ? `
-              <tr><td colspan="6" class="p-8 text-center text-slate-400">등록된 수업이 없습니다.</td></tr>
+              <tr><td colspan="7" class="p-8 text-center text-slate-400">등록된 수업이 없습니다.</td></tr>
             ` : classes.map(c => {
               const isClosed = c.status === "CLOSED";
               return `
@@ -170,6 +171,9 @@ function renderAdminClassesView() {
                   <td class="p-3">
                     <div class="font-bold text-slate-900">${escapeHtml(c.teacher)}</div>
                     <div class="text-slate-400 text-[11px]">${escapeHtml(c.location)}</div>
+                  </td>
+                  <td class="p-3 whitespace-nowrap text-slate-700 font-medium">
+                    ${escapeHtml(c.dateTime)}
                   </td>
                   <td class="p-3 max-w-xs font-medium text-slate-800">
                     ${escapeHtml(c.topic)}
@@ -201,8 +205,62 @@ function renderAdminClassesView() {
   `;
 }
 
+function parseDateTimePickerValues(dateTimeStr) {
+  let dateVal = "2026-10-15";
+  let startTime = "13:30";
+  let endTime = "14:20";
+  let periodLabel = "5교시";
+
+  if (dateTimeStr) {
+    const matchDate = dateTimeStr.match(/\d{4}-\d{2}-\d{2}/);
+    if (matchDate) dateVal = matchDate[0];
+
+    const matchTimes = dateTimeStr.match(/(\d{2}:\d{2})\s*~\s*(\d{2}:\d{2})/);
+    if (matchTimes) {
+      startTime = matchTimes[1];
+      endTime = matchTimes[2];
+    }
+
+    const matchPeriod = dateTimeStr.match(/\(([^)]+)\)/);
+    if (matchPeriod) {
+      periodLabel = matchPeriod[1];
+    }
+  }
+
+  return { dateVal, startTime, endTime, periodLabel };
+}
+
+function parseDeadlinePickerValue(deadlineStr) {
+  if (!deadlineStr) return "";
+  const d = deadlineStr.trim();
+  if (d.includes("T")) return d.slice(0, 16);
+  return d.replace(" ", "T").slice(0, 16);
+}
+
+function handlePeriodPresetChange() {
+  const sel = document.getElementById("formClassPeriodPreset").value;
+  const presets = {
+    "1교시": { start: "09:00", end: "09:50", label: "1교시" },
+    "2교시": { start: "10:00", end: "10:50", label: "2교시" },
+    "3교시": { start: "11:00", end: "11:50", label: "3교시" },
+    "4교시": { start: "12:00", end: "12:50", label: "4교시" },
+    "5교시": { start: "13:30", end: "14:20", label: "5교시" },
+    "6교시": { start: "14:30", end: "15:20", label: "6교시" },
+    "7교시": { start: "15:30", end: "16:20", label: "7교시" }
+  };
+
+  if (presets[sel]) {
+    document.getElementById("formClassStartTime").value = presets[sel].start;
+    document.getElementById("formClassEndTime").value = presets[sel].end;
+    document.getElementById("formClassPeriodLabel").value = presets[sel].label;
+  }
+}
+
 function openClassFormModal(classId = null) {
   const item = classId ? AppState.classes.find(c => String(c.id) === String(classId)) : null;
+
+  const dtParsed = parseDateTimePickerValues(item ? item.dateTime : "");
+  const deadlineParsed = parseDeadlinePickerValue(item ? item.deadline : "");
 
   const modalHtml = `
     <div id="adminClassModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -241,21 +299,61 @@ function openClassFormModal(classId = null) {
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block font-semibold text-slate-700 mb-1">수업 일시 *</label>
-              <input type="text" id="formClassDateTime" required value="${item ? escapeHtml(item.dateTime) : ""}" placeholder="예: 2026-10-15 13:30 (5교시)" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
+          <!-- 수업 일시 (클릭 선택 피커 UI) -->
+          <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 space-y-3">
+            <label class="block font-bold text-indigo-900 flex items-center gap-1.5">
+              <i class="fa-regular fa-calendar-days text-indigo-600"></i> 수업 일시 선택 *
+            </label>
+            
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">수업 날짜 (달력 선택)</label>
+                <input type="date" id="formClassDate" required value="${dtParsed.dateVal}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">교시 프리셋 선택</label>
+                <select id="formClassPeriodPreset" onchange="handlePeriodPresetChange()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white">
+                  <option value="1교시" ${dtParsed.periodLabel === "1교시" ? "selected" : ""}>1교시 (09:00 ~ 09:50)</option>
+                  <option value="2교시" ${dtParsed.periodLabel === "2교시" ? "selected" : ""}>2교시 (10:00 ~ 10:50)</option>
+                  <option value="3교시" ${dtParsed.periodLabel === "3교시" ? "selected" : ""}>3교시 (11:00 ~ 11:50)</option>
+                  <option value="4교시" ${dtParsed.periodLabel === "4교시" ? "selected" : ""}>4교시 (12:00 ~ 12:50)</option>
+                  <option value="5교시" ${dtParsed.periodLabel === "5교시" || !dtParsed.periodLabel ? "selected" : ""}>5교시 (13:30 ~ 14:20)</option>
+                  <option value="6교시" ${dtParsed.periodLabel === "6교시" ? "selected" : ""}>6교시 (14:30 ~ 15:20)</option>
+                  <option value="7교시" ${dtParsed.periodLabel === "7교시" ? "selected" : ""}>7교시 (15:30 ~ 16:20)</option>
+                  <option value="CUSTOM">직접 시간 지정</option>
+                </select>
+              </div>
             </div>
+
+            <div class="grid grid-cols-3 gap-2 pt-1">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">시작 시간</label>
+                <input type="time" id="formClassStartTime" required value="${dtParsed.startTime}" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">종료 시간</label>
+                <input type="time" id="formClassEndTime" required value="${dtParsed.endTime}" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">교시 명칭</label>
+                <input type="text" id="formClassPeriodLabel" required value="${dtParsed.periodLabel}" placeholder="예: 5교시" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-semibold text-slate-700 mb-1">최대 정원 (0=무제한) *</label>
               <input type="number" id="formClassCapacity" min="0" required value="${item ? item.capacity : 15}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
             </div>
-          </div>
 
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">수업 참관 신청 마감 기한 (선택)</label>
-            <input type="text" id="formClassDeadline" value="${item ? escapeHtml(item.deadline || "") : ""}" placeholder="예: 2026-10-14 18:00:00 (미입력 시 무기한)" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs">
-            <p class="text-[11px] text-slate-400 mt-1">지정한 일시가 지나면 해당 수업은 자동으로 참관 신청이 마감됩니다.</p>
+            <!-- 마감 기한 (클릭 선택 datetime-local 피커 UI) -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <i class="fa-regular fa-clock text-amber-600"></i> 참관 신청 마감 일시 (클릭 선택)
+              </label>
+              <input type="datetime-local" id="formClassDeadline" value="${deadlineParsed}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white">
+            </div>
           </div>
 
           <div>
@@ -306,17 +404,37 @@ async function saveAdminClass(event) {
     }
   }
 
+  // 클릭 피커 입력값 결합
+  const classDate = document.getElementById("formClassDate").value;
+  const startTime = document.getElementById("formClassStartTime").value;
+  const endTime = document.getElementById("formClassEndTime").value;
+  const periodLabel = document.getElementById("formClassPeriodLabel").value.trim();
+
+  let dateTimeFormatted = classDate;
+  if (startTime && endTime) {
+    dateTimeFormatted += ` ${startTime} ~ ${endTime}`;
+  }
+  if (periodLabel) {
+    dateTimeFormatted += ` (${periodLabel})`;
+  }
+
+  const deadlineVal = document.getElementById("formClassDeadline").value;
+  let deadlineFormatted = "";
+  if (deadlineVal) {
+    deadlineFormatted = deadlineVal.replace("T", " ") + ":00";
+  }
+
   const payload = {
     id: document.getElementById("formClassId").value || null,
     subject: document.getElementById("formClassSubject").value,
     teacher: document.getElementById("formClassTeacher").value.trim(),
     gradeGroup: document.getElementById("formClassGrade").value.trim(),
     location: document.getElementById("formClassLocation").value.trim(),
-    dateTime: document.getElementById("formClassDateTime").value.trim(),
+    dateTime: dateTimeFormatted,
     capacity: Number(document.getElementById("formClassCapacity").value) || 0,
     topic: document.getElementById("formClassTopic").value.trim(),
     description: document.getElementById("formClassDesc").value.trim(),
-    deadline: document.getElementById("formClassDeadline").value.trim(),
+    deadline: deadlineFormatted,
     fileData: fileData
   };
 
