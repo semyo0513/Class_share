@@ -9,7 +9,11 @@
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
  */
 
-// 글로벌 상수 정의
+// Google 스프레드시트 ID (스프레드시트 URL의 /d/와 /edit 사이의 문자열)
+// 스프레드시트 내 [확장 프로그램] > [Apps Script]에서 생성한 경우는 빈값("")으로 두셔도 자동 연결됩니다.
+const SPREADSHEET_ID = "";
+
+// 글로벌 시트 이름 정의
 const SHEETS = {
   CLASSES: "Classes",
   APPLICATIONS: "Applications",
@@ -17,6 +21,24 @@ const SHEETS = {
   BOARD: "Board",
   CONFIG: "Config"
 };
+
+/**
+ * 활성화된 Google Spreadsheet 객체 안전 반환
+ */
+function getSpreadsheet() {
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) return ss;
+
+  if (SPREADSHEET_ID && SPREADSHEET_ID.trim() !== "") {
+    try {
+      return SpreadsheetApp.openById(SPREADSHEET_ID.trim());
+    } catch (err) {
+      Logger.log("SPREADSHEET_ID 접근 실패: " + err.toString());
+    }
+  }
+
+  throw new Error("Google 스프레드시트를 찾을 수 없습니다. 스프레드시트의 [확장 프로그램] > [Apps Script] 메뉴에서 스크립트를 생성 및 실행하시거나, Code.gs 상단의 SPREADSHEET_ID를 설정해주세요.");
+}
 
 /**
  * HTTP GET 요청 라우터 (데이터 조회)
@@ -81,7 +103,7 @@ function doPost(e) {
 
       // 2. 사용자 참관 신청 조회
       case "checkMyApplications":
-        return createJsonResponse(handleCheckMyApplications(postData.payload.applicantName, postData.payload.phone));
+        return createJsonResponse(handleCheckMyApplications(postData.payload ? postData.payload.applicantName : "", postData.payload ? postData.payload.phone : ""));
 
       // 3. 사용자 참관 신청 수정
       case "updateMyApplication":
@@ -105,32 +127,32 @@ function doPost(e) {
       // 7. [관리자] 수업 저장 / 삭제 / 상태 토글
       case "saveClass":
         if (!verifyAdminPassword(postData.adminPassword)) {
-          return createJsonResponse({ error: "인증 실패" }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패 (비밀번호 오류)" }, 401, false);
         }
         return createJsonResponse(handleSaveClass(postData.payload));
 
       case "deleteClass":
         if (!verifyAdminPassword(postData.adminPassword)) {
-          return createJsonResponse({ error: "인증 실패" }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
         }
         return createJsonResponse(handleDeleteClass(postData.classId));
 
       case "toggleClassStatus":
         if (!verifyAdminPassword(postData.adminPassword)) {
-          return createJsonResponse({ error: "인증 실패" }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
         }
         return createJsonResponse(handleToggleClassStatus(postData.payload));
 
       // 8. [관리자] 공지사항 저장 / 삭제
       case "saveNotice":
         if (!verifyAdminPassword(postData.adminPassword)) {
-          return createJsonResponse({ error: "인증 실패" }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
         }
         return createJsonResponse(handleSaveNotice(postData.payload));
 
       case "deleteNotice":
         if (!verifyAdminPassword(postData.adminPassword)) {
-          return createJsonResponse({ error: "인증 실패" }, 401, false);
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
         }
         return createJsonResponse(handleDeleteNotice(postData.noticeId));
 
@@ -160,10 +182,14 @@ function getInitialData() {
  * 수업 목록 조회 (마감 기한 및 실시간 신청인원 반영)
  */
 function getClassesList() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const classSheet = ss.getSheetByName(SHEETS.CLASSES);
-  const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
+  const ss = getSpreadsheet();
+  let classSheet = ss.getSheetByName(SHEETS.CLASSES);
+  if (!classSheet) {
+    initDatabaseSheets();
+    classSheet = ss.getSheetByName(SHEETS.CLASSES);
+  }
 
+  const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   if (!classSheet) return [];
 
   const classData = classSheet.getDataRange().getValues();
@@ -196,7 +222,6 @@ function getClassesList() {
       const currentApplied = applyCountMap[classId] || 0;
       const deadline = r[13] ? formatDateVal(r[13]) : "";
 
-      // 마감 기한 체크
       let isDeadlinePassed = false;
       if (deadline) {
         const deadlineDate = new Date(deadline);
@@ -249,7 +274,7 @@ function handleApplyClass(payload) {
     throw new Error("현재 수업 참관 신청 접수 기간이 아닙니다.");
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const classSheet = ss.getSheetByName(SHEETS.CLASSES);
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
 
@@ -336,7 +361,7 @@ function handleCheckMyApplications(applicantName, phone) {
     throw new Error("성명과 연락처를 모두 입력해주세요.");
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   if (!appSheet) return [];
 
@@ -379,7 +404,7 @@ function handleUpdateMyApplication(payload) {
     throw new Error("필수 정보가 누락되었습니다.");
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   const appRows = appSheet.getDataRange().getValues();
   const cleanInputPhone = String(payload.phone).replace(/[^0-9]/g, "");
@@ -391,9 +416,9 @@ function handleUpdateMyApplication(payload) {
     const status = String(appRows[i][8]);
 
     if (rowName === String(payload.applicantName).trim() && rowPhone === cleanInputPhone && rowClassId === String(payload.classId) && status !== "CANCELLED") {
-      appSheet.getRange(i + 1, 3).setValue(payload.school || ""); // 소속학교
-      appSheet.getRange(i + 1, 5).setValue(payload.email || "");  // 이메일
-      appSheet.getRange(i + 1, 8).setValue(payload.remark || ""); // 비고
+      appSheet.getRange(i + 1, 3).setValue(payload.school || "");
+      appSheet.getRange(i + 1, 5).setValue(payload.email || "");
+      appSheet.getRange(i + 1, 8).setValue(payload.remark || "");
       return { message: "참관 신청 정보가 성공적으로 수정되었습니다." };
     }
   }
@@ -409,7 +434,7 @@ function handleCancelMyApplication(payload) {
     throw new Error("취소할 신청 정보가 부족합니다.");
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   const appRows = appSheet.getDataRange().getValues();
   const cleanInputPhone = String(payload.phone).replace(/[^0-9]/g, "");
@@ -434,7 +459,7 @@ function handleCancelMyApplication(payload) {
 function handleToggleClassStatus(payload) {
   if (!payload || !payload.classId) throw new Error("수업 ID가 필요합니다.");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const classSheet = ss.getSheetByName(SHEETS.CLASSES);
   const rows = classSheet.getDataRange().getValues();
 
@@ -456,8 +481,13 @@ function handleToggleClassStatus(payload) {
 function handleSaveClass(payload) {
   if (!payload) throw new Error("수업 저장 데이터가 없습니다.");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.CLASSES);
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName(SHEETS.CLASSES);
+  if (!sheet) {
+    initDatabaseSheets();
+    sheet = ss.getSheetByName(SHEETS.CLASSES);
+  }
+
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
 
   let fileUrl = payload.fileUrl || "";
@@ -528,13 +558,13 @@ function handleSaveClass(payload) {
     sheet.appendRow(rowData);
   }
 
-  return { message: "수업 정보가 정상적으로 저장되었습니다.", classId: classId };
+  return { message: "수업 정보가 구글 시트에 정상적으로 저장되었습니다.", classId: classId };
 }
 
 function handleDeleteClass(classId) {
   if (!classId) throw new Error("삭제할 수업 ID가 필요합니다.");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.CLASSES);
   const rows = sheet.getDataRange().getValues();
 
@@ -549,7 +579,7 @@ function handleDeleteClass(classId) {
 }
 
 function getNoticesList() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.NOTICES);
   if (!sheet) return [];
 
@@ -576,7 +606,7 @@ function getNoticesList() {
 function handleSaveNotice(payload) {
   if (!payload) throw new Error("공지사항 데이터가 없습니다.");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.NOTICES);
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
 
@@ -611,7 +641,7 @@ function handleSaveNotice(payload) {
 }
 
 function handleDeleteNotice(noticeId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.NOTICES);
   const rows = sheet.getDataRange().getValues();
 
@@ -626,7 +656,7 @@ function handleDeleteNotice(noticeId) {
 }
 
 function getBoardList() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.BOARD);
   if (!sheet) return [];
 
@@ -650,7 +680,7 @@ function handleCreateBoardPost(payload) {
     throw new Error("필수 입력 항목이 누락되었습니다.");
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.BOARD);
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   const postId = `BRD-${Date.now().toString().slice(-6)}`;
@@ -675,7 +705,7 @@ function handleDeleteBoardPost(payload) {
     throw new Error("게시글 ID와 비밀번호를 입력해주세요.");
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.BOARD);
   const rows = sheet.getDataRange().getValues();
   const inputHash = computeSha256(payload.password);
@@ -695,7 +725,7 @@ function handleDeleteBoardPost(payload) {
 }
 
 function getAllApplications() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   if (!appSheet) return [];
 
@@ -722,7 +752,7 @@ function getAllApplications() {
  * ================================================================== */
 
 function getConfigMap() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.CONFIG);
   if (!sheet) return {};
 
@@ -773,7 +803,7 @@ function formatDateVal(val) {
 }
 
 function initDatabaseSheets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
 
   let classesSheet = ss.getSheetByName(SHEETS.CLASSES);
   if (!classesSheet) {

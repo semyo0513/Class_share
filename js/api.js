@@ -49,24 +49,6 @@ function getInitialMockStore() {
         status: "ACTIVE",
         createdAt: "2026-08-21 11:30:00",
         deadline: "2026-10-14 18:00:00"
-      },
-      {
-        id: "CLS-2026-003",
-        subject: "과학",
-        teacher: "이진아",
-        gradeGroup: "3학년 2반",
-        dateTime: "2026-10-16 10:30 ~ 11:20 (2교시)",
-        location: "3층 과학실험2실",
-        topic: "센서 모듈을 활용한 미세먼지 측정 및 환경 데이터 분석",
-        description: "아두이노 센서로 학교 내 미세먼지 데이터를 실시간 측정하고 통계 지표로 가공하는 탐구실험 수업입니다.",
-        capacity: 12,
-        currentApplied: 4,
-        isFull: false,
-        fileUrl: "https://example.com/sample_science.pdf",
-        fileName: "3학년_과학탐구_실험지.pdf",
-        status: "ACTIVE",
-        createdAt: "2026-08-22 14:15:00",
-        deadline: "2026-10-15 18:00:00"
       }
     ],
     applications: [
@@ -80,18 +62,6 @@ function getInitialMockStore() {
         classId: "CLS-2026-001",
         className: "[국어] AI 도구를 활용한 논증문 작성 및 상호 피드백 수업 (김수현 선생님)",
         remark: "AI 피드백 도입 방식이 궁금합니다.",
-        status: "CONFIRMED"
-      },
-      {
-        rowNum: 3,
-        timestamp: "2026-08-24 09:40:00",
-        applicantName: "강영희",
-        school: "삼현여자중학교",
-        phone: "010-9876-5432",
-        email: "kang@gne.go.kr",
-        classId: "CLS-2026-002",
-        className: "[수학] 지오지브라(GeoGebra) 기반 이차함수 그래프의 실생활 탐구 (박민우 선생님)",
-        remark: "공학도구 교실 활용 팁을 배우고 싶습니다.",
         status: "CONFIRMED"
       }
     ],
@@ -136,10 +106,10 @@ const API = {
         const res = await fetch(url.toString(), { method: "GET" });
         const json = await res.json();
         if (json.success) return json.data;
-        throw new Error(json.data?.error || json.message || "서버 응답 에러");
+        throw new Error(json.data?.error || json.message || "구글 시트 데이터 조회 실패");
       } catch (err) {
-        console.warn(`[GAS GET ${action} 실패 -> Mock Fallback 사용]`, err);
-        return this.getMock(action, params);
+        console.error(`[GAS GET ${action} 통신 실패]`, err);
+        throw new Error(`Google 시트 연동 오류: ${err.message}. Apps Script 웹앱의 '새 버전 배포' 및 '모든 사용자' 액세스 권한 설정을 확인하세요.`);
       }
     }
     return this.getMock(action, params);
@@ -154,12 +124,20 @@ const API = {
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify(bodyData)
         });
-        const json = await res.json();
+
+        const text = await res.text();
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch (parseErr) {
+          throw new Error("구글 앱스 스크립트가 올바른 JSON 응답을 반환하지 않았습니다. (Web App 액세스 권한이 '모든 사용자'로 설정되어 있는지 확인하세요)");
+        }
+
         if (json.success) return json.data;
-        throw new Error(json.data?.error || json.message || "처리 실패");
+        throw new Error(json.data?.error || json.message || "구글 시트 저장 처리 실패");
       } catch (err) {
-        console.warn(`[GAS POST ${action} 실패 -> Mock Fallback 사용]`, err);
-        return this.postMock(action, payload, adminPassword);
+        console.error(`[GAS POST ${action} 통신 실패]`, err);
+        throw new Error(`Google 시트 저장 실패: ${err.message}`);
       }
     }
     return this.postMock(action, payload, adminPassword);
@@ -167,7 +145,6 @@ const API = {
 
   async getMock(action, params = {}) {
     const store = getInitialMockStore();
-    
     switch (action) {
       case "getInitialData":
         return { classes: store.classes, notices: store.notices, config: store.config };
@@ -270,7 +247,6 @@ const API = {
         if (!target) throw new Error("취소할 신청 내역을 찾을 수 없습니다.");
         target.status = "CANCELLED";
 
-        // 차감 및 정원 복구
         const targetClass = store.classes.find(c => String(c.id) === String(payload.classId));
         if (targetClass && targetClass.currentApplied > 0) {
           targetClass.currentApplied -= 1;
