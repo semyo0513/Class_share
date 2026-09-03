@@ -5,7 +5,7 @@
  * - Google Sheets (DB) 연동 및 Google Drive (파일 저장) 연동
  * - Config 시트에서 지정한 DRIVE_FOLDER_ID 구글 드라이브 폴더 자동 연결
  * - LockService를 통한 동시 신청 정원 초과(Overbooking) 방지
- * - SHA-256 해시 기반 관리자, 게시글 및 참관신청 비밀번호 인증
+ * - 관리자, 게시글 및 참관신청 비밀번호 인증 (앞자리 0 보존 처리 포함)
  * - 비밀번호 기반 참관 신청 조회 / 수정 / 취소 API 지원
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
  * - 수업지도안, 공지사항, 게시판 Q&A 구글 드라이브 첨부파일 업로드 및 비밀글 지원
@@ -256,7 +256,8 @@ function handleApplyClass(payload) {
     throw new Error("신청 대상 수업 정보가 누락되었습니다.");
   }
 
-  if (!password || String(password).trim().length < 4) {
+  const rawPassword = password ? String(password).trim() : "";
+  if (!rawPassword || rawPassword.length < 4) {
     throw new Error("신청 확인 및 취소에 사용할 4자리 이상 비밀번호를 입력해주세요.");
   }
 
@@ -301,7 +302,6 @@ function handleApplyClass(payload) {
   const appRows = appSheet.getDataRange().getValues();
   let currentCount = 0;
   const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, "") : "";
-  const pwHash = computeSha256(password);
 
   for (let i = 1; i < appRows.length; i++) {
     const rowClassId = String(appRows[i][5]);
@@ -325,17 +325,22 @@ function handleApplyClass(payload) {
   }
 
   const timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  
+  // 구글 시트에서 숫자 변환으로 인해 '0'으로 시작하는 번호/비밀번호의 앞자리 0 탈락 방지 (단할표 ' 강제)
+  const textPhone = phone ? "'" + String(phone).trim() : "";
+  const textPassword = "'" + rawPassword;
+
   appSheet.appendRow([
     timestamp,
     applicantName || "(미입력)",
     school || "",
-    phone || "",
+    textPhone,
     email || "",
     classId,
     targetClass.name,
     remark || "",
     "CONFIRMED",
-    pwHash
+    textPassword
   ]);
 
   return { 
@@ -346,10 +351,47 @@ function handleApplyClass(payload) {
 }
 
 /**
+ * 비밀번호 일치 여부 다각도 안전 검증
+ * (구글 시트의 자동 숫자 변환으로 인한 앞자리 0 탈락 유연 대응)
+ */
+function isPasswordMatch(inputPassword, storedValue) {
+  if (!inputPassword || storedValue === undefined || storedValue === null) return false;
+
+  const rawInput = String(inputPassword).trim();
+  let rawStored = String(storedValue).trim();
+
+  // 구글 시트 텍스트 접두사 단할표 제거
+  if (rawStored.startsWith("'")) {
+    rawStored = rawStored.substring(1);
+  }
+
+  if (rawInput === "" || rawStored === "") return false;
+
+  // 1. 문자열 완전 일치 (예: "0123" === "0123")
+  if (rawInput === rawStored) return true;
+
+  // 2. SHA-256 해시 일치
+  const inputHash = computeSha256(rawInput);
+  if (inputHash === rawStored) return true;
+
+  // 3. 앞자리 0 탈락 유연 비교 (시트에 123으로 변환되어 저장된 기존 데이터 대응)
+  const strippedInput = rawInput.replace(/^0+/, "");
+  const strippedStored = rawStored.replace(/^0+/, "");
+
+  if (strippedInput !== "" && strippedInput === strippedStored) return true;
+  if (strippedInput !== "" && computeSha256(strippedInput) === rawStored) return true;
+
+  return false;
+}
+
+/**
  * 본인 참관 신청 내역 조회 (비밀번호 필수, 성명/연락처 옵션)
  */
 function handleCheckMyApplications(applicantName, phone, password) {
-  if (!password && !phone) {
+  const rawPassword = password ? String(password).trim() : "";
+  const rawPhone = phone ? String(phone).trim() : "";
+
+  if (!rawPassword && !rawPhone) {
     throw new Error("신청 시 설정한 비밀번호를 입력해주세요.");
   }
 
@@ -360,9 +402,8 @@ function handleCheckMyApplications(applicantName, phone, password) {
   const appData = appSheet.getDataRange().getValues();
   if (appData.length <= 1) return [];
 
-  const inputPwHash = password ? computeSha256(password) : "";
-  const cleanInputPhone = phone ? String(phone).replace(/[^0-9]/g, "") : "";
   const cleanInputName = applicantName ? String(applicantName).trim() : "";
+  const cleanInputPhone = rawPhone ? rawPhone.replace(/[^0-9]/g, "") : "";
 
   const result = [];
 
@@ -371,19 +412,17 @@ function handleCheckMyApplications(applicantName, phone, password) {
     const rowName = String(r[1]).trim();
     const rowPhone = String(r[3]).replace(/[^0-9]/g, "");
     const status = String(r[8]);
-    const storedPwHash = String(r[9] || "");
+    const storedPw = r[9];
 
     if (status !== "CANCELLED") {
       let isMatch = false;
 
-      if (inputPwHash && storedPwHash) {
-        if (storedPwHash === inputPwHash) {
-          isMatch = true;
-          if (cleanInputName && rowName && rowName !== "(미입력)" && rowName !== cleanInputName) {
-            isMatch = false;
-          }
+      if (rawPassword && isPasswordMatch(rawPassword, storedPw)) {
+        isMatch = true;
+        if (cleanInputName && rowName && rowName !== "(미입력)" && rowName !== cleanInputName) {
+          isMatch = false;
         }
-      } else if (cleanInputName && cleanInputPhone) {
+      } else if (!rawPassword && cleanInputName && cleanInputPhone) {
         if (rowName === cleanInputName && rowPhone === cleanInputPhone) {
           isMatch = true;
         }
@@ -420,19 +459,18 @@ function handleUpdateMyApplication(payload) {
   const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   const appRows = appSheet.getDataRange().getValues();
-  const inputPwHash = computeSha256(payload.password);
+  const rawPassword = String(payload.password).trim();
   const cleanInputPhone = payload.phone ? String(payload.phone).replace(/[^0-9]/g, "") : "";
 
   for (let i = 1; i < appRows.length; i++) {
-    const rowName = String(appRows[i][1]).trim();
     const rowPhone = String(appRows[i][3]).replace(/[^0-9]/g, "");
     const rowClassId = String(appRows[i][5]);
     const status = String(appRows[i][8]);
-    const storedPwHash = String(appRows[i][9] || "");
+    const storedPw = appRows[i][9];
 
     if (rowClassId === String(payload.classId) && status !== "CANCELLED") {
-      const isPwMatch = storedPwHash ? (storedPwHash === inputPwHash) : (cleanInputPhone && rowPhone === cleanInputPhone);
-      if (isPwMatch) {
+      const isMatch = isPasswordMatch(rawPassword, storedPw) || (cleanInputPhone && rowPhone === cleanInputPhone);
+      if (isMatch) {
         appSheet.getRange(i + 1, 3).setValue(payload.school || "");
         appSheet.getRange(i + 1, 5).setValue(payload.email || "");
         appSheet.getRange(i + 1, 8).setValue(payload.remark || "");
@@ -441,7 +479,7 @@ function handleUpdateMyApplication(payload) {
     }
   }
 
-  throw new Error("비밀번호가 일치하지 않거나 신청 내역을 찾을 수 없습니다.");
+  throw new Error("비밀번호가 일치하지 않거나 수정할 신청 내역을 찾을 수 없습니다.");
 }
 
 /**
@@ -455,26 +493,25 @@ function handleCancelMyApplication(payload) {
   const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   const appRows = appSheet.getDataRange().getValues();
-  const inputPwHash = computeSha256(payload.password);
+  const rawPassword = String(payload.password).trim();
   const cleanInputPhone = payload.phone ? String(payload.phone).replace(/[^0-9]/g, "") : "";
 
   for (let i = 1; i < appRows.length; i++) {
-    const rowName = String(appRows[i][1]).trim();
     const rowPhone = String(appRows[i][3]).replace(/[^0-9]/g, "");
     const rowClassId = String(appRows[i][5]);
     const status = String(appRows[i][8]);
-    const storedPwHash = String(appRows[i][9] || "");
+    const storedPw = appRows[i][9];
 
     if (rowClassId === String(payload.classId) && status !== "CANCELLED") {
-      const isPwMatch = storedPwHash ? (storedPwHash === inputPwHash) : (cleanInputPhone && rowPhone === cleanInputPhone);
-      if (isPwMatch) {
+      const isMatch = isPasswordMatch(rawPassword, storedPw) || (cleanInputPhone && rowPhone === cleanInputPhone);
+      if (isMatch) {
         appSheet.getRange(i + 1, 9).setValue("CANCELLED");
         return { message: "참관 신청이 정상적으로 취소되었습니다." };
       }
     }
   }
 
-  throw new Error("비밀번호가 일치하지 않거나 신청 내역을 찾지 못했습니다.");
+  throw new Error("비밀번호가 일치하지 않거나 취소할 신청 내역을 찾지 못했습니다.");
 }
 
 function handleToggleClassStatus(payload) {
@@ -734,7 +771,7 @@ function handleCreateBoardPost(payload) {
 
   const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   const postId = `BRD-${Date.now().toString().slice(-6)}`;
-  const pwHash = computeSha256(payload.password);
+  const textBoardPw = "'" + String(payload.password).trim();
 
   let fileUrl = payload.fileUrl || "";
   let fileName = payload.fileName || "";
@@ -767,7 +804,7 @@ function handleCreateBoardPost(payload) {
     payload.school || "",
     payload.title,
     payload.content,
-    pwHash,
+    textBoardPw,
     payload.category || "자유소통",
     payload.isSecret ? "TRUE" : "FALSE",
     fileUrl,
@@ -785,12 +822,12 @@ function handleDeleteBoardPost(payload, adminPassword) {
   const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.BOARD);
   const rows = sheet.getDataRange().getValues();
-  const inputHash = computeSha256(payload.password);
+  const rawInputPw = String(payload.password).trim();
 
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(payload.postId)) {
-      const storedHash = String(rows[i][6]);
-      if (storedHash !== inputHash && !verifyAdminPassword(adminPassword || payload.password)) {
+      const storedPw = rows[i][6];
+      if (!isPasswordMatch(rawInputPw, storedPw) && !verifyAdminPassword(adminPassword || payload.password)) {
         throw new Error("비밀번호가 일치하지 않습니다.");
       }
       sheet.deleteRow(i + 1);
@@ -913,8 +950,7 @@ function verifyAdminPassword(inputPassword) {
   if (!storedHash || storedHash.trim() === "" || storedHash === "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3") {
     storedHash = defaultHash;
   }
-  const inputHash = computeSha256(inputPassword);
-  return storedHash === inputHash;
+  return isPasswordMatch(inputPassword, storedHash);
 }
 
 function computeSha256(str) {
@@ -952,7 +988,7 @@ function initDatabaseSheets() {
   let appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   if (!appSheet) {
     appSheet = ss.insertSheet(SHEETS.APPLICATIONS);
-    appSheet.appendRow(["timestamp", "applicantName", "school", "phone", "email", "classId", "className", "remark", "status", "passwordHash"]);
+    appSheet.appendRow(["timestamp", "applicantName", "school", "phone", "email", "classId", "className", "remark", "status", "password"]);
   }
 
   let noticeSheet = ss.getSheetByName(SHEETS.NOTICES);
@@ -964,7 +1000,7 @@ function initDatabaseSheets() {
   let boardSheet = ss.getSheetByName(SHEETS.BOARD);
   if (!boardSheet) {
     boardSheet = ss.insertSheet(SHEETS.BOARD);
-    boardSheet.appendRow(["id", "createdAt", "author", "school", "title", "content", "passwordHash", "category", "isSecret", "fileUrl", "fileName"]);
+    boardSheet.appendRow(["id", "createdAt", "author", "school", "title", "content", "password", "category", "isSecret", "fileUrl", "fileName"]);
   }
 
   let configSheet = ss.getSheetByName(SHEETS.CONFIG);
