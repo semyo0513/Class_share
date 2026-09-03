@@ -162,7 +162,7 @@
   <!-- 모달 1: 참관 신청 모달 -->
   <!-- ================================================================== -->
   <div id="applyModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-scaleUp">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-scaleUp max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-start border-b border-slate-100 pb-4">
         <div>
           <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100" id="modalClassSubject">교과명</span>
@@ -176,34 +176,44 @@
         <input type="hidden" id="applyClassId">
         
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">신청자 교사 성명 *</label>
-          <input type="text" id="applyName" required placeholder="예: 홍길동" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">신청자 교사 성명 (선택)</label>
+          <input type="text" id="applyName" placeholder="예: 홍길동" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
         
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">소속 학교명 *</label>
-          <input type="text" id="applySchool" required placeholder="예: 삼현여자고등학교" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">소속 학교명 (선택)</label>
+          <input type="text" id="applySchool" placeholder="예: 삼현여자고등학교" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">연락처 *</label>
-            <input type="tel" id="applyPhone" required placeholder="010-0000-0000" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">연락처 (선택)</label>
+            <input type="tel" id="applyPhone" placeholder="010-0000-0000" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">이메일 주소 *</label>
-            <input type="email" id="applyEmail" required placeholder="teacher@gne.go.kr" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">이메일 주소 (선택)</label>
+            <input type="email" id="applyEmail" placeholder="teacher@gne.go.kr" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">수업자에게 전하고 싶은 말 / 참관 기대사항</label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">수업자에게 전하고 싶은 말 / 참관 기대사항 (선택)</label>
           <textarea id="applyRemark" rows="3" placeholder="수업 나눔에서 배우고 싶은 점이나 기대되는 부분을 자유롭게 적어주세요." class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
         </div>
 
-        <div class="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-          <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5"></i>
-          <span>입력하신 개인정보는 수업나눔한마당 참관자 확인용으로만 활용되며 행사 종료 후 파기됩니다.</span>
+        <!-- 개인정보 수집 및 이용 동의 박스 (필수 체크) -->
+        <div class="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-100 space-y-2">
+          <div class="flex items-start gap-2">
+            <input type="checkbox" id="applyPrivacyConsent" required class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+            <label for="applyPrivacyConsent" class="text-xs font-bold text-slate-800 cursor-pointer">
+              [필수] 개인정보 수집 및 이용에 동의합니다.
+            </label>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-relaxed pl-6">
+            • <strong>수집 및 이용 목적</strong>: 2026 삼현 수업나눔한마당 참관자 등록 및 참석자 확인<br>
+            • <strong>수집 항목</strong>: 성명, 소속학교, 연락처, 이메일, 참관 목적 (선택 입력한 항목에 한함)<br>
+            • <strong>보유 및 이용 기간</strong>: 행사 종료 및 참가자 명단 확인 완료 시 지체 없이 파기
+          </p>
         </div>
         
         <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">

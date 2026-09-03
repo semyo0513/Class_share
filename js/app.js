@@ -272,6 +272,9 @@ function openApplyModal(classId) {
   document.getElementById("modalClassTopic").textContent = target.topic;
   document.getElementById("modalClassTeacher").textContent = `${target.teacher} 선생님 | ${target.location} (${target.dateTime})`;
 
+  const privacyConsent = document.getElementById("applyPrivacyConsent");
+  if (privacyConsent) privacyConsent.checked = false;
+
   const modal = document.getElementById("applyModal");
   if (modal) modal.classList.remove("hidden");
 }
@@ -285,6 +288,12 @@ async function submitApplication(event) {
   event.preventDefault();
   const btn = document.getElementById("applySubmitBtn");
   const origText = btn.innerHTML;
+
+  const privacyConsent = document.getElementById("applyPrivacyConsent");
+  if (privacyConsent && !privacyConsent.checked) {
+    showToast("개인정보 수집 및 이용 동의에 체크해주세요.", "error");
+    return;
+  }
 
   const payload = {
     classId: document.getElementById("applyClassId").value,

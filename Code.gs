@@ -9,6 +9,7 @@
  * - 참관 신청 조회 / 수정 / 취소 API 지원
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
  * - 수업지도안, 공지사항, 게시판 Q&A 구글 드라이브 첨부파일 업로드 및 비밀글 지원
+ * - 참관 신청 입력 항목 선택 입력 및 개인정보제공동의 지원
  */
 
 const SPREADSHEET_ID = "";
@@ -248,8 +249,8 @@ function handleApplyClass(payload) {
   
   const { applicantName, school, phone, email, classId, remark } = payload;
 
-  if (!applicantName || !school || !phone || !classId) {
-    throw new Error("필수 입력 항목이 누락되었습니다.");
+  if (!classId) {
+    throw new Error("신청 대상 수업 정보가 누락되었습니다.");
   }
 
   const isRegOpen = getConfigValue("IS_REGISTRATION_OPEN");
@@ -292,7 +293,7 @@ function handleApplyClass(payload) {
 
   const appRows = appSheet.getDataRange().getValues();
   let currentCount = 0;
-  const cleanPhone = String(phone).replace(/[^0-9]/g, "");
+  const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, "") : "";
 
   for (let i = 1; i < appRows.length; i++) {
     const rowClassId = String(appRows[i][5]);
@@ -301,9 +302,11 @@ function handleApplyClass(payload) {
     if (status !== "CANCELLED") {
       if (rowClassId === String(classId)) {
         currentCount++;
-        const rowPhone = String(appRows[i][3]).replace(/[^0-9]/g, "");
-        if (rowPhone === cleanPhone) {
-          throw new Error("동일한 연락처로 이미 해당 수업을 신청하셨습니다.");
+        if (cleanPhone) {
+          const rowPhone = String(appRows[i][3]).replace(/[^0-9]/g, "");
+          if (rowPhone && rowPhone === cleanPhone) {
+            throw new Error("동일한 연락처로 이미 해당 수업을 신청하셨습니다.");
+          }
         }
       }
     }
@@ -316,9 +319,9 @@ function handleApplyClass(payload) {
   const timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   appSheet.appendRow([
     timestamp,
-    applicantName,
-    school,
-    phone,
+    applicantName || "(미입력)",
+    school || "",
+    phone || "",
     email || "",
     classId,
     targetClass.name,
@@ -329,7 +332,7 @@ function handleApplyClass(payload) {
   return { 
     message: "참관 신청이 정상적으로 완료되었습니다.", 
     classTitle: targetClass.name,
-    applicantName: applicantName
+    applicantName: applicantName || "(미입력)"
   };
 }
 
@@ -820,9 +823,6 @@ function handleSaveConfig(payload) {
   return { message: `[${targetKey}] 설정이 구글 시트에 등록되었습니다.`, key: targetKey, value: targetVal };
 }
 
-/**
- * 구글 드라이브 폴더 ID 파싱 (URL 전체 입력 시 자동으로 폴더 ID 추출)
- */
 function parseDriveFolderId(input) {
   if (!input) return "";
   const raw = String(input).trim();
@@ -840,9 +840,6 @@ function parseDriveFolderId(input) {
   return raw;
 }
 
-/**
- * Config 시트에 설정된 DRIVE_FOLDER_ID 구글 드라이브 폴더 객체 반환
- */
 function getTargetDriveFolder() {
   const rawFolderVal = getConfigValue("DRIVE_FOLDER_ID");
   const folderId = parseDriveFolderId(rawFolderVal);
