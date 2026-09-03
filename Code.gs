@@ -5,11 +5,10 @@
  * - Google Sheets (DB) 연동 및 Google Drive (파일 저장) 연동
  * - Config 시트에서 지정한 DRIVE_FOLDER_ID 구글 드라이브 폴더 자동 연결
  * - LockService를 통한 동시 신청 정원 초과(Overbooking) 방지
- * - SHA-256 해시 기반 관리자 및 게시글 비밀번호 인증
- * - 참관 신청 조회 / 수정 / 취소 API 지원
+ * - SHA-256 해시 기반 관리자, 게시글 및 참관신청 비밀번호 인증
+ * - 비밀번호 기반 참관 신청 조회 / 수정 / 취소 API 지원
  * - 관리자 수업 마감 기한 및 수동 마감 스위치 지원
  * - 수업지도안, 공지사항, 게시판 Q&A 구글 드라이브 첨부파일 업로드 및 비밀글 지원
- * - 참관 신청 입력 항목 선택 입력 및 개인정보제공동의 지원
  */
 
 const SPREADSHEET_ID = "";
@@ -61,7 +60,7 @@ function doGet(e) {
         }
         return createJsonResponse(getAllApplications());
       case "checkMyApplications":
-        return createJsonResponse(handleCheckMyApplications(params.applicantName, params.phone));
+        return createJsonResponse(handleCheckMyApplications(params.applicantName, params.phone, params.password));
       default:
         return createJsonResponse({ error: "올바르지 않은 API Action입니다." }, 400, false);
     }
@@ -94,7 +93,11 @@ function doPost(e) {
         return createJsonResponse(handleApplyClass(postData.payload));
 
       case "checkMyApplications":
-        return createJsonResponse(handleCheckMyApplications(postData.payload ? postData.payload.applicantName : "", postData.payload ? postData.payload.phone : ""));
+        return createJsonResponse(handleCheckMyApplications(
+          postData.payload ? postData.payload.applicantName : "", 
+          postData.payload ? postData.payload.phone : "", 
+          postData.payload ? postData.payload.password : ""
+        ));
 
       case "updateMyApplication":
         return createJsonResponse(handleUpdateMyApplication(postData.payload));
@@ -247,10 +250,14 @@ function getClassesList() {
 function handleApplyClass(payload) {
   if (!payload) throw new Error("신청 데이터가 전달되지 않았습니다.");
   
-  const { applicantName, school, phone, email, classId, remark } = payload;
+  const { applicantName, school, phone, email, classId, remark, password } = payload;
 
   if (!classId) {
     throw new Error("신청 대상 수업 정보가 누락되었습니다.");
+  }
+
+  if (!password || String(password).trim().length < 4) {
+    throw new Error("신청 확인 및 취소에 사용할 4자리 이상 비밀번호를 입력해주세요.");
   }
 
   const isRegOpen = getConfigValue("IS_REGISTRATION_OPEN");
@@ -294,6 +301,7 @@ function handleApplyClass(payload) {
   const appRows = appSheet.getDataRange().getValues();
   let currentCount = 0;
   const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, "") : "";
+  const pwHash = computeSha256(password);
 
   for (let i = 1; i < appRows.length; i++) {
     const rowClassId = String(appRows[i][5]);
@@ -326,7 +334,8 @@ function handleApplyClass(payload) {
     classId,
     targetClass.name,
     remark || "",
-    "CONFIRMED"
+    "CONFIRMED",
+    pwHash
   ]);
 
   return { 
@@ -336,9 +345,12 @@ function handleApplyClass(payload) {
   };
 }
 
-function handleCheckMyApplications(applicantName, phone) {
-  if (!applicantName || !phone) {
-    throw new Error("성명과 연락처를 모두 입력해주세요.");
+/**
+ * 본인 참관 신청 내역 조회 (비밀번호 필수, 성명/연락처 옵션)
+ */
+function handleCheckMyApplications(applicantName, phone, password) {
+  if (!password && !phone) {
+    throw new Error("신청 시 설정한 비밀번호를 입력해주세요.");
   }
 
   const ss = getSpreadsheet();
@@ -348,7 +360,10 @@ function handleCheckMyApplications(applicantName, phone) {
   const appData = appSheet.getDataRange().getValues();
   if (appData.length <= 1) return [];
 
-  const cleanInputPhone = String(phone).replace(/[^0-9]/g, "");
+  const inputPwHash = password ? computeSha256(password) : "";
+  const cleanInputPhone = phone ? String(phone).replace(/[^0-9]/g, "") : "";
+  const cleanInputName = applicantName ? String(applicantName).trim() : "";
+
   const result = [];
 
   for (let i = 1; i < appData.length; i++) {
@@ -356,75 +371,110 @@ function handleCheckMyApplications(applicantName, phone) {
     const rowName = String(r[1]).trim();
     const rowPhone = String(r[3]).replace(/[^0-9]/g, "");
     const status = String(r[8]);
+    const storedPwHash = String(r[9] || "");
 
-    if (rowName === String(applicantName).trim() && rowPhone === cleanInputPhone && status !== "CANCELLED") {
-      result.push({
-        rowNum: i + 1,
-        timestamp: formatDateVal(r[0]),
-        applicantName: r[1],
-        school: r[2],
-        phone: r[3],
-        email: r[4],
-        classId: r[5],
-        className: r[6],
-        remark: r[7],
-        status: r[8]
-      });
+    if (status !== "CANCELLED") {
+      let isMatch = false;
+
+      if (inputPwHash && storedPwHash) {
+        if (storedPwHash === inputPwHash) {
+          isMatch = true;
+          if (cleanInputName && rowName && rowName !== "(미입력)" && rowName !== cleanInputName) {
+            isMatch = false;
+          }
+        }
+      } else if (cleanInputName && cleanInputPhone) {
+        if (rowName === cleanInputName && rowPhone === cleanInputPhone) {
+          isMatch = true;
+        }
+      }
+
+      if (isMatch) {
+        result.push({
+          rowNum: i + 1,
+          timestamp: formatDateVal(r[0]),
+          applicantName: r[1],
+          school: r[2],
+          phone: r[3],
+          email: r[4],
+          classId: r[5],
+          className: r[6],
+          remark: r[7],
+          status: r[8]
+        });
+      }
     }
   }
 
   return result;
 }
 
+/**
+ * 본인 참관 신청 내역 수정 (비밀번호 검증)
+ */
 function handleUpdateMyApplication(payload) {
-  if (!payload || !payload.classId || !payload.phone || !payload.applicantName) {
-    throw new Error("필수 정보가 누락되었습니다.");
+  if (!payload || !payload.classId || !payload.password) {
+    throw new Error("수정할 수업 ID와 비밀번호가 필요합니다.");
   }
 
   const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   const appRows = appSheet.getDataRange().getValues();
-  const cleanInputPhone = String(payload.phone).replace(/[^0-9]/g, "");
+  const inputPwHash = computeSha256(payload.password);
+  const cleanInputPhone = payload.phone ? String(payload.phone).replace(/[^0-9]/g, "") : "";
 
   for (let i = 1; i < appRows.length; i++) {
     const rowName = String(appRows[i][1]).trim();
     const rowPhone = String(appRows[i][3]).replace(/[^0-9]/g, "");
     const rowClassId = String(appRows[i][5]);
     const status = String(appRows[i][8]);
+    const storedPwHash = String(appRows[i][9] || "");
 
-    if (rowName === String(payload.applicantName).trim() && rowPhone === cleanInputPhone && rowClassId === String(payload.classId) && status !== "CANCELLED") {
-      appSheet.getRange(i + 1, 3).setValue(payload.school || "");
-      appSheet.getRange(i + 1, 5).setValue(payload.email || "");
-      appSheet.getRange(i + 1, 8).setValue(payload.remark || "");
-      return { message: "참관 신청 정보가 성공적으로 수정되었습니다." };
+    if (rowClassId === String(payload.classId) && status !== "CANCELLED") {
+      const isPwMatch = storedPwHash ? (storedPwHash === inputPwHash) : (cleanInputPhone && rowPhone === cleanInputPhone);
+      if (isPwMatch) {
+        appSheet.getRange(i + 1, 3).setValue(payload.school || "");
+        appSheet.getRange(i + 1, 5).setValue(payload.email || "");
+        appSheet.getRange(i + 1, 8).setValue(payload.remark || "");
+        return { message: "참관 신청 정보가 성공적으로 수정되었습니다." };
+      }
     }
   }
 
-  throw new Error("수정할 신청 내역을 찾을 수 없습니다.");
+  throw new Error("비밀번호가 일치하지 않거나 신청 내역을 찾을 수 없습니다.");
 }
 
+/**
+ * 본인 참관 신청 취소 (비밀번호 검증)
+ */
 function handleCancelMyApplication(payload) {
-  if (!payload || !payload.classId || !payload.phone || !payload.applicantName) {
-    throw new Error("취소할 신청 정보가 부족합니다.");
+  if (!payload || !payload.classId || !payload.password) {
+    throw new Error("취소할 수업 ID와 비밀번호를 입력해주세요.");
   }
 
   const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   const appRows = appSheet.getDataRange().getValues();
-  const cleanInputPhone = String(payload.phone).replace(/[^0-9]/g, "");
+  const inputPwHash = computeSha256(payload.password);
+  const cleanInputPhone = payload.phone ? String(payload.phone).replace(/[^0-9]/g, "") : "";
 
   for (let i = 1; i < appRows.length; i++) {
     const rowName = String(appRows[i][1]).trim();
     const rowPhone = String(appRows[i][3]).replace(/[^0-9]/g, "");
     const rowClassId = String(appRows[i][5]);
+    const status = String(appRows[i][8]);
+    const storedPwHash = String(appRows[i][9] || "");
 
-    if (rowName === String(payload.applicantName).trim() && rowPhone === cleanInputPhone && rowClassId === String(payload.classId)) {
-      appSheet.getRange(i + 1, 9).setValue("CANCELLED");
-      return { message: "참관 신청이 정상적으로 취소되었습니다." };
+    if (rowClassId === String(payload.classId) && status !== "CANCELLED") {
+      const isPwMatch = storedPwHash ? (storedPwHash === inputPwHash) : (cleanInputPhone && rowPhone === cleanInputPhone);
+      if (isPwMatch) {
+        appSheet.getRange(i + 1, 9).setValue("CANCELLED");
+        return { message: "참관 신청이 정상적으로 취소되었습니다." };
+      }
     }
   }
 
-  throw new Error("취소하려는 참관 신청 내역을 찾지 못했습니다.");
+  throw new Error("비밀번호가 일치하지 않거나 신청 내역을 찾지 못했습니다.");
 }
 
 function handleToggleClassStatus(payload) {
@@ -902,7 +952,7 @@ function initDatabaseSheets() {
   let appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
   if (!appSheet) {
     appSheet = ss.insertSheet(SHEETS.APPLICATIONS);
-    appSheet.appendRow(["timestamp", "applicantName", "school", "phone", "email", "classId", "className", "remark", "status"]);
+    appSheet.appendRow(["timestamp", "applicantName", "school", "phone", "email", "classId", "className", "remark", "status", "passwordHash"]);
   }
 
   let noticeSheet = ss.getSheetByName(SHEETS.NOTICES);

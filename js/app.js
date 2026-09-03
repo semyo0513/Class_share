@@ -14,7 +14,7 @@ const AppState = {
   activeBoardCategory: "ALL",
   searchQuery: "",
   myApplications: [],
-  currentCheckUser: { name: "", phone: "" }
+  currentCheckUser: { password: "", name: "" }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -295,8 +295,15 @@ async function submitApplication(event) {
     return;
   }
 
+  const pw = document.getElementById("applyPassword").value.trim();
+  if (!pw || pw.length < 4) {
+    showToast("신청 확인/취소용 비밀번호를 4자리 이상 입력해주세요.", "error");
+    return;
+  }
+
   const payload = {
     classId: document.getElementById("applyClassId").value,
+    password: pw,
     applicantName: document.getElementById("applyName").value.trim(),
     school: document.getElementById("applySchool").value.trim(),
     phone: document.getElementById("applyPhone").value.trim(),
@@ -323,7 +330,7 @@ async function submitApplication(event) {
 }
 
 /* ==================================================================
- * 본인 참관 신청 확인 / 수정 / 취소 모달
+ * 본인 참관 신청 확인 / 수정 / 취소 모달 (비밀번호 인증)
  * ================================================================== */
 function openCheckApplyModal() {
   const modal = document.getElementById("checkApplyModal");
@@ -342,19 +349,22 @@ function closeMyApplyResultModal() {
 
 async function handleCheckApplySubmit(event) {
   event.preventDefault();
+  const pw = document.getElementById("checkPassword").value.trim();
   const name = document.getElementById("checkName").value.trim();
-  const phone = document.getElementById("checkPhone").value.trim();
   const btn = document.getElementById("checkSubmitBtn");
 
-  if (!name || !phone) return;
+  if (!pw) {
+    showToast("신청 시 설정한 비밀번호를 입력해주세요.", "error");
+    return;
+  }
 
   try {
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 조회 중...`;
 
-    const list = await API.post("checkMyApplications", { applicantName: name, phone: phone });
+    const list = await API.post("checkMyApplications", { password: pw, applicantName: name });
     AppState.myApplications = list || [];
-    AppState.currentCheckUser = { name, phone };
+    AppState.currentCheckUser = { password: pw, name: name };
 
     closeCheckApplyModal();
     renderMyApplicationsResult();
@@ -379,8 +389,8 @@ function renderMyApplicationsResult() {
     container.innerHTML = `
       <div class="p-8 text-center text-slate-500 space-y-2 border border-slate-200 rounded-xl">
         <i class="fa-solid fa-circle-question text-3xl text-slate-300"></i>
-        <p class="text-sm font-semibold">입력하신 정보로 접수된 참관 신청 내역이 없습니다.</p>
-        <p class="text-xs text-slate-400">성명과 연락처를 다시 확인해 주세요.</p>
+        <p class="text-sm font-semibold">입력하신 비밀번호로 접수된 참관 신청 내역이 없습니다.</p>
+        <p class="text-xs text-slate-400">비밀번호를 다시 확인해 주세요.</p>
       </div>
     `;
     return;
@@ -405,15 +415,15 @@ function renderMyApplicationsResult() {
       <h4 class="text-sm font-bold text-slate-900">${escapeHtml(a.className)}</h4>
 
       <div id="myAppView-${a.classId}" class="space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
-        <p><strong>신청자:</strong> ${escapeHtml(a.applicantName)} (${escapeHtml(a.school)})</p>
-        <p><strong>연락처:</strong> ${escapeHtml(a.phone)} | <strong>이메일:</strong> ${escapeHtml(a.email || "미입력")}</p>
+        <p><strong>신청자:</strong> ${escapeHtml(a.applicantName || "(미입력)")} (${escapeHtml(a.school || "소속미입력")})</p>
+        <p><strong>연락처:</strong> ${escapeHtml(a.phone || "미입력")} | <strong>이메일:</strong> ${escapeHtml(a.email || "미입력")}</p>
         <p><strong>기대사항/비고:</strong> ${escapeHtml(a.remark || "없음")}</p>
       </div>
 
       <form id="myAppEditForm-${a.classId}" onsubmit="saveMyApplyEdit(event, '${a.classId}')" class="hidden space-y-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">소속 학교명 *</label>
-          <input type="text" id="editSchool-${a.classId}" required value="${escapeHtml(a.school)}" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg">
+          <label class="block font-semibold text-slate-700 mb-1">소속 학교명</label>
+          <input type="text" id="editSchool-${a.classId}" value="${escapeHtml(a.school)}" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg">
         </div>
         <div>
           <label class="block font-semibold text-slate-700 mb-1">이메일 주소</label>
@@ -447,8 +457,8 @@ async function saveMyApplyEdit(event, classId) {
   
   const payload = {
     classId: classId,
+    password: user.password,
     applicantName: user.name,
-    phone: user.phone,
     school: document.getElementById(`editSchool-${classId}`).value.trim(),
     email: document.getElementById(`editEmail-${classId}`).value.trim(),
     remark: document.getElementById(`editRemark-${classId}`).value.trim()
@@ -476,8 +486,8 @@ async function cancelMyApply(classId) {
   const user = AppState.currentCheckUser;
   const payload = {
     classId: classId,
-    applicantName: user.name,
-    phone: user.phone
+    password: user.password,
+    applicantName: user.name
   };
 
   try {

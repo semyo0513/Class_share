@@ -123,10 +123,10 @@ const API = {
         }
         return store.applications;
       case "checkMyApplications": {
+        const pw = String(params.password || "").trim();
         const name = String(params.applicantName || "").trim();
-        const cleanPhone = String(params.phone || "").replace(/[^0-9]/g, "");
         return store.applications.filter(a => 
-          a.applicantName === name && a.phone.replace(/[^0-9]/g, "") === cleanPhone && a.status !== "CANCELLED"
+          a.status !== "CANCELLED" && (a.password === pw || (name && a.applicantName === name))
         );
       }
       default:
@@ -147,9 +147,11 @@ const API = {
         if (!target) throw new Error("수업을 찾을 수 없습니다.");
         if (target.status === "CLOSED") throw new Error("해당 수업은 신청 마감되었습니다.");
 
-        const cleanPhone = String(payload.phone).replace(/[^0-9]/g, "");
-        const dup = store.applications.find(a => String(a.classId) === String(payload.classId) && a.phone.replace(/[^0-9]/g, "") === cleanPhone && a.status !== "CANCELLED");
-        if (dup) throw new Error("동일한 연락처로 이미 해당 수업을 신청하셨습니다.");
+        const cleanPhone = String(payload.phone || "").replace(/[^0-9]/g, "");
+        if (cleanPhone) {
+          const dup = store.applications.find(a => String(a.classId) === String(payload.classId) && a.phone.replace(/[^0-9]/g, "") === cleanPhone && a.status !== "CANCELLED");
+          if (dup) throw new Error("동일한 연락처로 이미 해당 수업을 신청하셨습니다.");
+        }
 
         if (target.capacity > 0 && target.currentApplied >= target.capacity) {
           throw new Error("선착순 정원이 마감되었습니다.");
@@ -164,10 +166,11 @@ const API = {
         store.applications.push({
           rowNum: store.applications.length + 2,
           timestamp: nowStr,
-          applicantName: payload.applicantName,
-          school: payload.school,
-          phone: payload.phone,
+          applicantName: payload.applicantName || "(미입력)",
+          school: payload.school || "",
+          phone: payload.phone || "",
           email: payload.email || "",
+          password: payload.password || "",
           classId: payload.classId,
           className: `[${target.subject}] ${target.topic} (${target.teacher} 선생님)`,
           remark: payload.remark || "",
@@ -179,20 +182,20 @@ const API = {
       }
 
       case "checkMyApplications": {
+        const pw = String(payload.password || "").trim();
         const name = String(payload.applicantName || "").trim();
-        const cleanPhone = String(payload.phone || "").replace(/[^0-9]/g, "");
         return store.applications.filter(a => 
-          a.applicantName === name && a.phone.replace(/[^0-9]/g, "") === cleanPhone && a.status !== "CANCELLED"
+          a.status !== "CANCELLED" && ((pw && a.password === pw) || (name && a.applicantName === name))
         );
       }
 
       case "updateMyApplication": {
-        const cleanPhone = String(payload.phone).replace(/[^0-9]/g, "");
+        const pw = String(payload.password || "").trim();
         const target = store.applications.find(a => 
-          a.applicantName === payload.applicantName && a.phone.replace(/[^0-9]/g, "") === cleanPhone && String(a.classId) === String(payload.classId) && a.status !== "CANCELLED"
+          String(a.classId) === String(payload.classId) && a.status !== "CANCELLED" && (a.password === pw || a.applicantName === payload.applicantName)
         );
 
-        if (!target) throw new Error("수정할 신청 내역을 찾을 수 없습니다.");
+        if (!target) throw new Error("비밀번호가 일치하지 않거나 수정할 신청 내역을 찾을 수 없습니다.");
         target.school = payload.school || target.school;
         target.email = payload.email || target.email;
         target.remark = payload.remark || target.remark;
@@ -202,12 +205,12 @@ const API = {
       }
 
       case "cancelMyApplication": {
-        const cleanPhone = String(payload.phone).replace(/[^0-9]/g, "");
+        const pw = String(payload.password || "").trim();
         const target = store.applications.find(a => 
-          a.applicantName === payload.applicantName && a.phone.replace(/[^0-9]/g, "") === cleanPhone && String(a.classId) === String(payload.classId) && a.status !== "CANCELLED"
+          String(a.classId) === String(payload.classId) && a.status !== "CANCELLED" && (a.password === pw || a.applicantName === payload.applicantName)
         );
 
-        if (!target) throw new Error("취소할 신청 내역을 찾을 수 없습니다.");
+        if (!target) throw new Error("비밀번호가 일치하지 않거나 취소할 신청 내역을 찾을 수 없습니다.");
         target.status = "CANCELLED";
 
         const targetClass = store.classes.find(c => String(c.id) === String(payload.classId));
