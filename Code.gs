@@ -403,7 +403,7 @@ function handleApplyClass(payload) {
       const boardId = `BRD-${Date.now().toString().slice(-6)}`;
       const authorName = applicantName && String(applicantName).trim() !== "" ? String(applicantName).trim() : "선생님";
       const authorSchool = school && String(school).trim() !== "" ? String(school).trim() : (teacherType === "INTERNAL" ? "삼현여자중학교" : "");
-      const boardTitle = `[참관 기대평] ${targetClass.name}`;
+      const boardTitle = `[참관기대평] [${targetClass.subject}] (${targetClass.teacher} 선생님)`;
       const boardContent = `💡 참관 기대평 / 수업자 전달 한마디:\n${String(remark).trim()}`;
 
       boardSheet.appendRow([

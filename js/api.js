@@ -189,7 +189,7 @@ const API = {
             createdAt: nowStr,
             author: authorName,
             school: authorSchool,
-            title: `[참관 기대평] [${target.subject}] ${target.topic} (${target.teacher} 선생님)`,
+            title: `[참관기대평] [${target.subject}] (${target.teacher} 선생님)`,
             content: `💡 참관 기대평 / 수업자 전달 한마디:\n${String(payload.remark).trim()}`,
             password: payload.password || "",
             category: "자유소통",
