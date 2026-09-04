@@ -600,7 +600,11 @@ function handleSaveClass(payload) {
       const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
       
       const file = targetFolder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        Logger.log("Sharing setting warning: " + shareErr.toString());
+      }
       
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
@@ -715,7 +719,11 @@ function handleSaveNotice(payload) {
       const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
       
       const file = targetFolder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        Logger.log("Sharing setting warning: " + shareErr.toString());
+      }
       
       fileUrl = file.getUrl();
     } catch (fileErr) {
@@ -832,7 +840,11 @@ function handleCreateBoardPost(payload) {
       const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
       
       const file = targetFolder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        Logger.log("Sharing setting warning: " + shareErr.toString());
+      }
       
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
