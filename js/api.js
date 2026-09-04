@@ -39,7 +39,11 @@ function getInitialMockStore() {
     config: {
       EVENT_TITLE: "2026 삼현 수업나눔한마당",
       IS_REGISTRATION_OPEN: "TRUE",
-      DRIVE_FOLDER_ID: ""
+      DRIVE_FOLDER_ID: "",
+      REQUIRE_NAME: "TRUE",
+      REQUIRE_SCHOOL_EXTERNAL: "TRUE",
+      REQUIRE_PHONE: "FALSE",
+      REQUIRE_EMAIL: "FALSE"
     }
   };
 

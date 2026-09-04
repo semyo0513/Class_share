@@ -294,6 +294,27 @@ function handleApplyClass(payload) {
     throw new Error("현재 수업 참관 신청 접수 기간이 아닙니다.");
   }
 
+  const configMap = getConfigMap();
+  const requireName = (configMap.REQUIRE_NAME || "TRUE").toUpperCase() === "TRUE";
+  const requireSchoolExternal = (configMap.REQUIRE_SCHOOL_EXTERNAL || "TRUE").toUpperCase() === "TRUE";
+  const requirePhone = (configMap.REQUIRE_PHONE || "FALSE").toUpperCase() === "TRUE";
+  const requireEmail = (configMap.REQUIRE_EMAIL || "FALSE").toUpperCase() === "TRUE";
+
+  const teacherType = payload.teacherType || "INTERNAL";
+
+  if (requireName && (!applicantName || !applicantName.trim())) {
+    throw new Error("신청자 교사 성명을 입력해 주세요.");
+  }
+  if (teacherType === "EXTERNAL" && requireSchoolExternal && (!school || !school.trim())) {
+    throw new Error("외부 교원의 경우 소속 학교명을 필수 입력해 주세요.");
+  }
+  if (requirePhone && (!phone || !phone.trim())) {
+    throw new Error("연락처를 입력해 주세요.");
+  }
+  if (requireEmail && (!email || !email.trim())) {
+    throw new Error("이메일 주소를 입력해 주세요.");
+  }
+
   const ss = getSpreadsheet();
   const classSheet = ss.getSheetByName(SHEETS.CLASSES);
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
@@ -1036,5 +1057,9 @@ function initDatabaseSheets() {
     configSheet.appendRow(["EVENT_TITLE", "2026 삼현 수업나눔한마당", "행사 메인 제목"]);
     configSheet.appendRow(["IS_REGISTRATION_OPEN", "TRUE", "참관 신청 가능 여부 (TRUE/FALSE)"]);
     configSheet.appendRow(["DRIVE_FOLDER_ID", "", "첨부파일이 업로드될 Google Drive 폴더 ID (또는 전체 URL 주소)"]);
+    configSheet.appendRow(["REQUIRE_NAME", "TRUE", "신청자 교사 성명 필수 입력 여부 (TRUE/FALSE)"]);
+    configSheet.appendRow(["REQUIRE_SCHOOL_EXTERNAL", "TRUE", "외부 교원 소속 학교명 필수 입력 여부 (TRUE/FALSE)"]);
+    configSheet.appendRow(["REQUIRE_PHONE", "FALSE", "연락처 필수 입력 여부 (TRUE/FALSE)"]);
+    configSheet.appendRow(["REQUIRE_EMAIL", "FALSE", "이메일 주소 필수 입력 여부 (TRUE/FALSE)"]);
   }
 }

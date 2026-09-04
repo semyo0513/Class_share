@@ -793,7 +793,10 @@ async function renderAdminConfigView() {
     AdminState.config = configMap || {};
     const driveFolderId = AdminState.config.DRIVE_FOLDER_ID || "";
     const eventTitle = AdminState.config.EVENT_TITLE || "2026 삼현 수업나눔한마당";
-    const isRegOpen = (AdminState.config.IS_REGISTRATION_OPEN || "TRUE").toUpperCase() === "TRUE";
+    const reqName = (AdminState.config.REQUIRE_NAME || "TRUE").toUpperCase() === "TRUE";
+    const reqSchoolExt = (AdminState.config.REQUIRE_SCHOOL_EXTERNAL || "TRUE").toUpperCase() === "TRUE";
+    const reqPhone = (AdminState.config.REQUIRE_PHONE || "FALSE").toUpperCase() === "TRUE";
+    const reqEmail = (AdminState.config.REQUIRE_EMAIL || "FALSE").toUpperCase() === "TRUE";
 
     container.innerHTML = `
       <div class="space-y-6 max-w-2xl">
@@ -822,6 +825,41 @@ async function renderAdminConfigView() {
           </div>
         </form>
 
+        <form onsubmit="saveRequiredFieldsConfig(event)" class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 text-xs">
+          <div>
+            <label class="block font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+              <i class="fa-solid fa-list-check text-indigo-600"></i> 참관 신청 필수 입력 필드 설정
+            </label>
+            <p class="text-[11px] text-slate-500 mb-3 leading-relaxed">
+              선생님들께서 참관 신청 모달을 작성하실 때 필수 입력(Required)으로 지정할 항목을 설정합니다.
+            </p>
+            <div class="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <label class="flex items-center gap-2 font-semibold text-slate-800 cursor-pointer">
+                <input type="checkbox" id="cfgReqName" ${reqName ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+                <span>신청자 교사 성명 필수</span>
+              </label>
+              <label class="flex items-center gap-2 font-semibold text-slate-800 cursor-pointer">
+                <input type="checkbox" id="cfgReqSchoolExt" ${reqSchoolExt ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+                <span>외부 교원의 경우 소속 학교명 필수 (교내 교원은 선택 입력)</span>
+              </label>
+              <label class="flex items-center gap-2 font-semibold text-slate-800 cursor-pointer">
+                <input type="checkbox" id="cfgReqPhone" ${reqPhone ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+                <span>연락처 (전화번호) 필수</span>
+              </label>
+              <label class="flex items-center gap-2 font-semibold text-slate-800 cursor-pointer">
+                <input type="checkbox" id="cfgReqEmail" ${reqEmail ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+                <span>이메일 주소 필수</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" id="saveReqFieldsBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow transition-all">
+              필수 항목 설정 저장
+            </button>
+          </div>
+        </form>
+
         <form onsubmit="saveEventTitleConfig(event)" class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 text-xs">
           <div>
             <label class="block font-bold text-slate-800 mb-1">행사 메인 타이틀 명칭</label>
@@ -841,15 +879,46 @@ async function renderAdminConfigView() {
             웹사이트 관리자 화면 외에도 연결된 <strong>Google 스프레드시트</strong>의 <strong><code class="bg-white border text-indigo-700 px-1 font-bold">Config</code> 탭</strong>에서 직접 값을 변경하실 수 있습니다:
           </p>
           <ul class="list-disc list-inside text-slate-500 space-y-1 pl-1">
-            <li><strong>DRIVE_FOLDER_ID (B행 5열)</strong>: 구글 드라이브 폴더 ID (또는 전체 URL)</li>
-            <li><strong>EVENT_TITLE (B행 3열)</strong>: 행사 타이틀 명칭</li>
-            <li><strong>IS_REGISTRATION_OPEN (B행 4열)</strong>: <code class="font-bold text-emerald-600">TRUE</code> (신청가능) / <code class="font-bold text-rose-600">FALSE</code> (신청차단)</li>
+            <li><strong>DRIVE_FOLDER_ID</strong>: 구글 드라이브 폴더 ID (또는 전체 URL)</li>
+            <li><strong>REQUIRE_NAME</strong>: <code class="font-bold text-indigo-700">TRUE / FALSE</code> (성명 필수)</li>
+            <li><strong>REQUIRE_SCHOOL_EXTERNAL</strong>: <code class="font-bold text-indigo-700">TRUE / FALSE</code> (외부교원 학교 필수)</li>
+            <li><strong>REQUIRE_PHONE</strong>: <code class="font-bold text-indigo-700">TRUE / FALSE</code> (연락처 필수)</li>
+            <li><strong>REQUIRE_EMAIL</strong>: <code class="font-bold text-indigo-700">TRUE / FALSE</code> (이메일 필수)</li>
           </ul>
         </div>
       </div>
     `;
   } catch (err) {
     container.innerHTML = `<div class="p-8 text-center text-rose-600 font-bold">설정 데이터 로드 실패: ${err.message}</div>`;
+  }
+}
+
+async function saveRequiredFieldsConfig(event) {
+  event.preventDefault();
+  const btn = document.getElementById("saveReqFieldsBtn");
+  const origText = btn.innerHTML;
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 저장 중...`;
+
+    const reqNameVal = document.getElementById("cfgReqName").checked ? "TRUE" : "FALSE";
+    const reqSchoolExtVal = document.getElementById("cfgReqSchoolExt").checked ? "TRUE" : "FALSE";
+    const reqPhoneVal = document.getElementById("cfgReqPhone").checked ? "TRUE" : "FALSE";
+    const reqEmailVal = document.getElementById("cfgReqEmail").checked ? "TRUE" : "FALSE";
+
+    await API.post("saveConfig", { key: "REQUIRE_NAME", value: reqNameVal, description: "신청자 교사 성명 필수 여부" }, AdminState.password);
+    await API.post("saveConfig", { key: "REQUIRE_SCHOOL_EXTERNAL", value: reqSchoolExtVal, description: "외부 교원 소속 학교명 필수 여부" }, AdminState.password);
+    await API.post("saveConfig", { key: "REQUIRE_PHONE", value: reqPhoneVal, description: "연락처 필수 여부" }, AdminState.password);
+    await API.post("saveConfig", { key: "REQUIRE_EMAIL", value: reqEmailVal, description: "이메일 필수 여부" }, AdminState.password);
+
+    showToast("필수 입력 항목 설정이 성공적으로 저장되었습니다.", "success");
+    await loadInitialData();
+  } catch (err) {
+    showToast("설정 저장 실패: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
   }
 }
 

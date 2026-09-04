@@ -43,6 +43,7 @@ async function initApp() {
           if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
         }
 
+        applyAdminFieldRequirements();
         updateHeaderStats();
         renderSubjectFilters();
         renderClasses();
@@ -79,6 +80,7 @@ async function loadInitialData() {
       if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
     }
 
+    applyAdminFieldRequirements();
     updateHeaderStats();
     renderClasses();
   } catch (err) {
@@ -313,6 +315,63 @@ function renderClassCardHtml(c) {
 /* ==================================================================
  * 참관 신청 모달 처리
  * ================================================================== */
+function toggleTeacherTypeValidation() {
+  const teacherTypeEl = document.querySelector('input[name="applyTeacherType"]:checked');
+  const teacherType = teacherTypeEl ? teacherTypeEl.value : 'INTERNAL';
+
+  const requireSchoolExternal = (AppState.config && AppState.config.REQUIRE_SCHOOL_EXTERNAL !== undefined)
+    ? String(AppState.config.REQUIRE_SCHOOL_EXTERNAL).toUpperCase() === 'TRUE'
+    : true;
+
+  const schoolInput = document.getElementById('applySchool');
+  const schoolMark = document.getElementById('markApplySchool');
+
+  if (teacherType === 'EXTERNAL' && requireSchoolExternal) {
+    if (schoolInput) {
+      schoolInput.required = true;
+      schoolInput.placeholder = '소속 학교명 입력 (예: 진주고등학교)';
+    }
+    if (schoolMark) schoolMark.classList.remove('hidden');
+  } else {
+    if (schoolInput) {
+      schoolInput.required = false;
+      schoolInput.placeholder = teacherType === 'INTERNAL'
+        ? '소속 학교명 (선택 사항, 기본: 삼현여자고등학교)'
+        : '소속 학교명 입력 (선택 사항)';
+    }
+    if (schoolMark) schoolMark.classList.add('hidden');
+  }
+}
+
+function applyAdminFieldRequirements() {
+  const requireName = (AppState.config && AppState.config.REQUIRE_NAME !== undefined)
+    ? String(AppState.config.REQUIRE_NAME).toUpperCase() === 'TRUE'
+    : true;
+  const requirePhone = (AppState.config && AppState.config.REQUIRE_PHONE !== undefined)
+    ? String(AppState.config.REQUIRE_PHONE).toUpperCase() === 'TRUE'
+    : false;
+  const requireEmail = (AppState.config && AppState.config.REQUIRE_EMAIL !== undefined)
+    ? String(AppState.config.REQUIRE_EMAIL).toUpperCase() === 'TRUE'
+    : false;
+
+  const nameInput = document.getElementById('applyName');
+  const nameMark = document.getElementById('markApplyName');
+  if (nameInput) nameInput.required = requireName;
+  if (nameMark) nameMark.classList.toggle('hidden', !requireName);
+
+  const phoneInput = document.getElementById('applyPhone');
+  const phoneMark = document.getElementById('markApplyPhone');
+  if (phoneInput) phoneInput.required = requirePhone;
+  if (phoneMark) phoneMark.classList.toggle('hidden', !requirePhone);
+
+  const emailInput = document.getElementById('applyEmail');
+  const emailMark = document.getElementById('markApplyEmail');
+  if (emailInput) emailInput.required = requireEmail;
+  if (emailMark) emailMark.classList.toggle('hidden', !requireEmail);
+
+  toggleTeacherTypeValidation();
+}
+
 function openApplyModal(classId) {
   const target = AppState.classes.find(c => String(c.id) === String(classId));
   if (!target) return;
@@ -321,6 +380,11 @@ function openApplyModal(classId) {
   document.getElementById("modalClassSubject").textContent = target.subject;
   document.getElementById("modalClassTopic").textContent = target.topic;
   document.getElementById("modalClassTeacher").textContent = `${target.teacher} 선생님 | ${target.location} (${target.dateTime})`;
+
+  const internalRadio = document.querySelector('input[name="applyTeacherType"][value="INTERNAL"]');
+  if (internalRadio) internalRadio.checked = true;
+
+  applyAdminFieldRequirements();
 
   const privacyConsent = document.getElementById("applyPrivacyConsent");
   if (privacyConsent) privacyConsent.checked = false;
@@ -351,13 +415,55 @@ async function submitApplication(event) {
     return;
   }
 
+  const teacherTypeEl = document.querySelector('input[name="applyTeacherType"]:checked');
+  const teacherType = teacherTypeEl ? teacherTypeEl.value : 'INTERNAL';
+  const name = document.getElementById("applyName").value.trim();
+  const school = document.getElementById("applySchool").value.trim();
+  const phone = document.getElementById("applyPhone").value.trim();
+  const email = document.getElementById("applyEmail").value.trim();
+
+  const requireName = (AppState.config && AppState.config.REQUIRE_NAME !== undefined)
+    ? String(AppState.config.REQUIRE_NAME).toUpperCase() === 'TRUE'
+    : true;
+  const requireSchoolExternal = (AppState.config && AppState.config.REQUIRE_SCHOOL_EXTERNAL !== undefined)
+    ? String(AppState.config.REQUIRE_SCHOOL_EXTERNAL).toUpperCase() === 'TRUE'
+    : true;
+  const requirePhone = (AppState.config && AppState.config.REQUIRE_PHONE !== undefined)
+    ? String(AppState.config.REQUIRE_PHONE).toUpperCase() === 'TRUE'
+    : false;
+  const requireEmail = (AppState.config && AppState.config.REQUIRE_EMAIL !== undefined)
+    ? String(AppState.config.REQUIRE_EMAIL).toUpperCase() === 'TRUE'
+    : false;
+
+  if (requireName && !name) {
+    showToast("신청자 교사 성명을 입력해 주세요.", "error");
+    document.getElementById("applyName").focus();
+    return;
+  }
+  if (teacherType === 'EXTERNAL' && requireSchoolExternal && !school) {
+    showToast("외부 교원의 경우 소속 학교명을 필수 입력해 주세요.", "error");
+    document.getElementById("applySchool").focus();
+    return;
+  }
+  if (requirePhone && !phone) {
+    showToast("연락처를 입력해 주세요.", "error");
+    document.getElementById("applyPhone").focus();
+    return;
+  }
+  if (requireEmail && !email) {
+    showToast("이메일 주소를 입력해 주세요.", "error");
+    document.getElementById("applyEmail").focus();
+    return;
+  }
+
   const payload = {
     classId: document.getElementById("applyClassId").value,
     password: pw,
-    applicantName: document.getElementById("applyName").value.trim(),
-    school: document.getElementById("applySchool").value.trim(),
-    phone: document.getElementById("applyPhone").value.trim(),
-    email: document.getElementById("applyEmail").value.trim(),
+    teacherType: teacherType,
+    applicantName: name,
+    school: school || (teacherType === 'INTERNAL' ? '삼현여자고등학교' : ''),
+    phone: phone,
+    email: email,
     remark: document.getElementById("applyRemark").value.trim()
   };
 
