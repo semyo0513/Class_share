@@ -609,7 +609,11 @@ function handleSaveClass(payload) {
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
     } catch (fileErr) {
-      throw new Error("수업자료 구글 드라이브 파일 업로드 오류: " + fileErr.toString());
+      const errStr = fileErr.toString();
+      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
+        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
+      }
+      throw new Error("수업자료 구글 드라이브 파일 업로드 오류: " + errStr);
     }
   }
 
@@ -727,7 +731,11 @@ function handleSaveNotice(payload) {
       
       fileUrl = file.getUrl();
     } catch (fileErr) {
-      throw new Error("공지사항 첨부파일 구글 드라이브 업로드 오류: " + fileErr.toString());
+      const errStr = fileErr.toString();
+      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
+        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
+      }
+      throw new Error("공지사항 첨부파일 구글 드라이브 업로드 오류: " + errStr);
     }
   }
 
@@ -849,7 +857,11 @@ function handleCreateBoardPost(payload) {
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
     } catch (fileErr) {
-      throw new Error("게시글 첨부파일 구글 드라이브 업로드 오류: " + fileErr.toString());
+      const errStr = fileErr.toString();
+      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
+        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
+      }
+      throw new Error("게시글 첨부파일 구글 드라이브 업로드 오류: " + errStr);
     }
   }
 
