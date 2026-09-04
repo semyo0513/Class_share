@@ -5,7 +5,7 @@
  */
 const CONFIG = {
   // Google Apps Script 웹 앱 배포 URL (배포 후 아래 "YOUR_GAS_DEPLOYMENT_URL_HERE" 부분을 교체하세요)
-  GAS_API_URL: "https://script.google.com/macros/s/AKfycbzGoOEPSe4BbjBTDAtomX4NL_IU0ivjOUXbn-ZKj8nnJ3-wv8_a4wI9otSWtEf3WN9u/exec", 
+  GAS_API_URL: "https://script.google.com/macros/s/AKfycbyNoLM9FtWU40lLqbNZc3LLTrpDdjevNV0YY6hRc5FGvvH4KMUB55au-O6N8c9huN5D/exec", 
   
   // 앱 기본 명칭
   APP_TITLE: "2026 삼현 수업나눔한마당",
