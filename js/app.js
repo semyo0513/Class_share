@@ -4,6 +4,8 @@
  * ==================================================================
  */
 
+const LOCAL_CACHE_KEY = "SAMHYUN_LOCAL_INITIAL_CACHE_V2";
+
 const AppState = {
   activeTab: "classes",
   classes: [],
@@ -14,7 +16,8 @@ const AppState = {
   activeBoardCategory: "ALL",
   searchQuery: "",
   myApplications: [],
-  currentCheckUser: { password: "", name: "" }
+  currentCheckUser: { password: "", name: "" },
+  isLoadingInitialData: true
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -24,10 +27,34 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initApp() {
   try {
     checkAdminAuthState();
-    await loadInitialData();
+
+    // 1. LocalStorage 캐시 복원 (0초 초고속 렌더링 UX)
+    const localCache = localStorage.getItem(LOCAL_CACHE_KEY);
+    if (localCache) {
+      try {
+        const parsed = JSON.parse(localCache);
+        AppState.classes = parsed.classes || [];
+        AppState.notices = parsed.notices || [];
+        AppState.config = parsed.config || {};
+        AppState.isLoadingInitialData = false;
+        
+        if (AppState.config.EVENT_TITLE) {
+          const headerTitle = document.getElementById("headerTitle");
+          if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
+        }
+
+        updateHeaderStats();
+        renderSubjectFilters();
+        renderClasses();
+      } catch (e) {}
+    }
+
     renderSubjectFilters();
     renderBoardCategoryFilters();
     navigateTab(AppState.activeTab);
+
+    // 2. 서버 백그라운드 실시간 동기화 (GAS 통신)
+    await loadInitialData();
   } catch (err) {
     showToast("초기 데이터를 불러오는데 실패하였습니다.", "error");
     console.error(err);
@@ -40,6 +67,12 @@ async function loadInitialData() {
     AppState.classes = data.classes || [];
     AppState.notices = data.notices || [];
     AppState.config = data.config || {};
+    AppState.isLoadingInitialData = false;
+
+    // 로컬 스토리지에 최신 데이터 캐시 저장
+    try {
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(data));
+    } catch (e) {}
 
     if (AppState.config.EVENT_TITLE) {
       const headerTitle = document.getElementById("headerTitle");
@@ -50,6 +83,8 @@ async function loadInitialData() {
     renderClasses();
   } catch (err) {
     console.error("초기 데이터 로드 에러:", err);
+    AppState.isLoadingInitialData = false;
+    renderClasses();
   }
 }
 
@@ -152,6 +187,21 @@ function handleClassSearch() {
 function renderClasses() {
   const grid = document.getElementById("classListGrid");
   if (!grid) return;
+
+  if (AppState.isLoadingInitialData && (!AppState.classes || AppState.classes.length === 0)) {
+    grid.innerHTML = `
+      <div class="col-span-full py-16 text-center bg-white rounded-2xl border border-slate-200 space-y-4 shadow-sm">
+        <div class="inline-flex items-center justify-center w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl">
+          <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+        </div>
+        <div class="space-y-1">
+          <p class="font-bold text-slate-800 text-base">수업 목록을 불러오는 중입니다...</p>
+          <p class="text-xs text-slate-400">잠시만 기다려 주세요 (Google Sheets 연동 중)</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   let filtered = AppState.classes || [];
 
