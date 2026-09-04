@@ -392,10 +392,44 @@ function handleApplyClass(payload) {
     textPassword
   ]);
 
+  // 참관 기대사항(remark)이 작성된 경우 소통/Q&A 나눔마당(Board)에 자동 게시글 등록
+  if (remark && String(remark).trim() !== "") {
+    try {
+      let boardSheet = ss.getSheetByName(SHEETS.BOARD);
+      if (!boardSheet) {
+        initDatabaseSheets();
+        boardSheet = ss.getSheetByName(SHEETS.BOARD);
+      }
+      const boardId = `BRD-${Date.now().toString().slice(-6)}`;
+      const authorName = applicantName && String(applicantName).trim() !== "" ? String(applicantName).trim() : "선생님";
+      const authorSchool = school && String(school).trim() !== "" ? String(school).trim() : (teacherType === "INTERNAL" ? "삼현여자중학교" : "");
+      const boardTitle = `[참관 기대평] ${targetClass.name}`;
+      const boardContent = `💡 참관 기대평 / 수업자 전달 한마디:\n${String(remark).trim()}`;
+
+      boardSheet.appendRow([
+        boardId,
+        timestamp,
+        authorName,
+        authorSchool,
+        boardTitle,
+        boardContent,
+        textPassword,
+        "자유소통",
+        "FALSE",
+        "",
+        ""
+      ]);
+    } catch (boardErr) {
+      Logger.log("참관 기대평 게시판 자동 등록 실패: " + boardErr.toString());
+    }
+  }
+
   clearInitialDataCache();
 
   return { 
-    message: "참관 신청이 정상적으로 완료되었습니다.", 
+    message: remark && String(remark).trim() !== "" 
+      ? "참관 신청이 완료되었으며, 참관 기대평이 나눔마당(게시판)에 자동 등록되었습니다." 
+      : "참관 신청이 정상적으로 완료되었습니다.", 
     classTitle: targetClass.name,
     applicantName: applicantName || "(미입력)"
   };
@@ -600,20 +634,12 @@ function handleSaveClass(payload) {
       const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
       
       const file = targetFolder.createFile(blob);
-      try {
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (shareErr) {
-        Logger.log("Sharing setting warning: " + shareErr.toString());
-      }
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
     } catch (fileErr) {
-      const errStr = fileErr.toString();
-      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
-        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
-      }
-      throw new Error("수업자료 구글 드라이브 파일 업로드 오류: " + errStr);
+      throw new Error("수업자료 구글 드라이브 파일 업로드 오류: " + fileErr.toString());
     }
   }
 
@@ -723,19 +749,11 @@ function handleSaveNotice(payload) {
       const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
       
       const file = targetFolder.createFile(blob);
-      try {
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (shareErr) {
-        Logger.log("Sharing setting warning: " + shareErr.toString());
-      }
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       
       fileUrl = file.getUrl();
     } catch (fileErr) {
-      const errStr = fileErr.toString();
-      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
-        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
-      }
-      throw new Error("공지사항 첨부파일 구글 드라이브 업로드 오류: " + errStr);
+      throw new Error("공지사항 첨부파일 구글 드라이브 업로드 오류: " + fileErr.toString());
     }
   }
 
@@ -848,20 +866,12 @@ function handleCreateBoardPost(payload) {
       const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
       
       const file = targetFolder.createFile(blob);
-      try {
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (shareErr) {
-        Logger.log("Sharing setting warning: " + shareErr.toString());
-      }
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       
       fileUrl = file.getUrl();
       fileName = payload.fileData.name;
     } catch (fileErr) {
-      const errStr = fileErr.toString();
-      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
-        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
-      }
-      throw new Error("게시글 첨부파일 구글 드라이브 업로드 오류: " + errStr);
+      throw new Error("게시글 첨부파일 구글 드라이브 업로드 오류: " + fileErr.toString());
     }
   }
 
