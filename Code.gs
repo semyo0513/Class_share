@@ -12,7 +12,7 @@
  * - 수업지도안, 공지사항, 게시판 Q&A 구글 드라이브 첨부파일 업로드 및 비밀글 지원
  */
 
-const SPREADSHEET_ID = "";
+const SPREADSHEET_ID = "1iQnVQPQf260BkTV1vrN4ZgtGEM1aybBMO2wB089HD_0";
 
 const SHEETS = {
   CLASSES: "Classes",
@@ -46,14 +46,14 @@ function doGet(e) {
     // ⚡ 1. 초고속 캐시 반환 (ScriptCache 체크) - initDatabaseSheets() 실행 전 즉시 반환
     const cache = CacheService.getScriptCache();
     if (action === "getInitialData") {
-      const cached = cache.get("INITIAL_DATA_CACHE_V2");
+      const cached = cache.get("INITIAL_DATA_CACHE_V3");
       if (cached) {
         try {
           return createJsonResponse(JSON.parse(cached));
         } catch (err) {}
       }
     } else if (action === "getClasses") {
-      const cached = cache.get("CLASSES_LIST_CACHE_V2");
+      const cached = cache.get("CLASSES_LIST_CACHE_V3");
       if (cached) {
         try {
           return createJsonResponse(JSON.parse(cached));
@@ -203,7 +203,7 @@ function doPost(e) {
  */
 function getInitialData() {
   const cache = CacheService.getScriptCache();
-  const cachedData = cache.get("INITIAL_DATA_CACHE_V2");
+  const cachedData = cache.get("INITIAL_DATA_CACHE_V3");
 
   if (cachedData) {
     try {
@@ -218,7 +218,7 @@ function getInitialData() {
   };
 
   try {
-    cache.put("INITIAL_DATA_CACHE_V2", JSON.stringify(freshData), 600); // 10분 캐싱
+    cache.put("INITIAL_DATA_CACHE_V3", JSON.stringify(freshData), 600); // 10분 캐싱
   } catch (e) {
     Logger.log("Cache error: " + e.toString());
   }
@@ -229,13 +229,13 @@ function getInitialData() {
 function clearInitialDataCache() {
   try {
     const cache = CacheService.getScriptCache();
-    cache.removeAll(["INITIAL_DATA_CACHE_V2", "CLASSES_LIST_CACHE_V2", "NOTICES_LIST_CACHE_V2"]);
+    cache.removeAll(["INITIAL_DATA_CACHE_V3", "CLASSES_LIST_CACHE_V3", "NOTICES_LIST_CACHE_V2"]);
   } catch (e) {}
 }
 
 function getClassesList() {
   const cache = CacheService.getScriptCache();
-  const cachedData = cache.get("CLASSES_LIST_CACHE_V2");
+  const cachedData = cache.get("CLASSES_LIST_CACHE_V3");
   if (cachedData) {
     try {
       return JSON.parse(cachedData);
@@ -314,7 +314,7 @@ function getClassesList() {
   });
 
   try {
-    cache.put("CLASSES_LIST_CACHE_V2", JSON.stringify(result), 600);
+    cache.put("CLASSES_LIST_CACHE_V3", JSON.stringify(result), 600);
   } catch (e) {}
 
   return result;

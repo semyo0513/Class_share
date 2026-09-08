@@ -4,7 +4,7 @@
  * ==================================================================
  */
 
-const LOCAL_CACHE_KEY = "SAMHYUN_LOCAL_INITIAL_CACHE_V2";
+const LOCAL_CACHE_KEY = "SAMHYUN_LOCAL_INITIAL_CACHE_V3";
 
 const AppState = {
   activeTab: "classes",

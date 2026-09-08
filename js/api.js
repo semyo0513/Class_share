@@ -63,6 +63,7 @@ const API = {
       try {
         const url = new URL(CONFIG.GAS_API_URL);
         url.searchParams.append("action", action);
+        url.searchParams.append("_t", Date.now().toString());
         Object.keys(params).forEach(k => {
           if (params[k] !== undefined && params[k] !== null) {
             url.searchParams.append(k, params[k]);
