@@ -18,7 +18,8 @@ const AppState = {
   searchQuery: "",
   myApplications: [],
   currentCheckUser: { password: "", name: "" },
-  isLoadingInitialData: true
+  isLoadingInitialData: true,
+  hasLoadError: false
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -37,7 +38,6 @@ async function initApp() {
         AppState.classes = parsed.classes || [];
         AppState.notices = parsed.notices || [];
         AppState.config = parsed.config || {};
-        AppState.isLoadingInitialData = false;
         
         if (AppState.config.EVENT_TITLE) {
           const headerTitle = document.getElementById("headerTitle");
@@ -63,30 +63,55 @@ async function initApp() {
   }
 }
 
+async function retryLoadInitialData() {
+  AppState.isLoadingInitialData = true;
+  AppState.hasLoadError = false;
+  renderClasses();
+  await loadInitialData();
+}
+
 async function loadInitialData() {
   try {
+    AppState.hasLoadError = false;
     const data = await API.get("getInitialData");
-    AppState.classes = data.classes || [];
-    AppState.notices = data.notices || [];
-    AppState.config = data.config || {};
-    AppState.isLoadingInitialData = false;
+    if (data && (data.classes || data.config)) {
+      AppState.classes = data.classes || [];
+      AppState.notices = data.notices || [];
+      AppState.config = data.config || {};
+      AppState.isLoadingInitialData = false;
 
-    // 로컬 스토리지에 최신 데이터 캐시 저장
-    try {
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(data));
-    } catch (e) {}
+      // 로컬 스토리지에 최신 데이터 캐시 저장
+      try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(data));
+      } catch (e) {}
 
-    if (AppState.config.EVENT_TITLE) {
-      const headerTitle = document.getElementById("headerTitle");
-      if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
+      if (AppState.config.EVENT_TITLE) {
+        const headerTitle = document.getElementById("headerTitle");
+        if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
+      }
+
+      applyAdminFieldRequirements();
+      updateHeaderStats();
+      renderClasses();
+    } else {
+      throw new Error("데이터 구조가 올바르지 않습니다.");
     }
-
-    applyAdminFieldRequirements();
-    updateHeaderStats();
-    renderClasses();
   } catch (err) {
     console.error("초기 데이터 로드 에러:", err);
     AppState.isLoadingInitialData = false;
+    AppState.hasLoadError = true;
+
+    // 만약 로컬 캐시가 있으면 로컬 캐시로복구
+    const localCache = localStorage.getItem(LOCAL_CACHE_KEY);
+    if (localCache && (!AppState.classes || AppState.classes.length === 0)) {
+      try {
+        const parsed = JSON.parse(localCache);
+        AppState.classes = parsed.classes || [];
+        AppState.notices = parsed.notices || [];
+        AppState.config = parsed.config || {};
+        showToast("서버 연결 지연으로 이전 저장 목록을 불러왔습니다.", "warning");
+      } catch (e) {}
+    }
     renderClasses();
   }
 }
@@ -203,6 +228,24 @@ function renderClasses() {
           <p class="font-bold text-slate-800 text-base">수업 목록을 불러오는 중입니다...</p>
           <p class="text-xs text-slate-400">잠시만 기다려 주세요 (Google Sheets 연동 중)</p>
         </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (AppState.hasLoadError && (!AppState.classes || AppState.classes.length === 0)) {
+    grid.innerHTML = `
+      <div class="col-span-full py-12 text-center bg-white rounded-2xl border border-rose-200 space-y-4 shadow-sm">
+        <div class="inline-flex items-center justify-center w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl">
+          <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+        </div>
+        <div class="space-y-1">
+          <p class="font-bold text-slate-800 text-base">수업 목록을 불러오지 못했습니다.</p>
+          <p class="text-xs text-slate-400">구글 시트 연동 시간이 초과되었거나 네트워크 상태가 불안정합니다.</p>
+        </div>
+        <button onclick="retryLoadInitialData()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm">
+          <i class="fa-solid fa-rotate-right mr-1.5"></i> 다시 불러오기
+        </button>
       </div>
     `;
     return;

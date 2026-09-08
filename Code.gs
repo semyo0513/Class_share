@@ -43,6 +43,24 @@ function doGet(e) {
   const action = params.action;
 
   try {
+    // ⚡ 1. 초고속 캐시 반환 (ScriptCache 체크) - initDatabaseSheets() 실행 전 즉시 반환
+    const cache = CacheService.getScriptCache();
+    if (action === "getInitialData") {
+      const cached = cache.get("INITIAL_DATA_CACHE_V2");
+      if (cached) {
+        try {
+          return createJsonResponse(JSON.parse(cached));
+        } catch (err) {}
+      }
+    } else if (action === "getClasses") {
+      const cached = cache.get("CLASSES_LIST_CACHE_V2");
+      if (cached) {
+        try {
+          return createJsonResponse(JSON.parse(cached));
+        } catch (err) {}
+      }
+    }
+
     initDatabaseSheets();
 
     switch (action) {
@@ -200,7 +218,7 @@ function getInitialData() {
   };
 
   try {
-    cache.put("INITIAL_DATA_CACHE_V2", JSON.stringify(freshData), 60); // 60초 캐싱
+    cache.put("INITIAL_DATA_CACHE_V2", JSON.stringify(freshData), 600); // 10분 캐싱
   } catch (e) {
     Logger.log("Cache error: " + e.toString());
   }
@@ -211,11 +229,19 @@ function getInitialData() {
 function clearInitialDataCache() {
   try {
     const cache = CacheService.getScriptCache();
-    cache.remove("INITIAL_DATA_CACHE_V2");
+    cache.removeAll(["INITIAL_DATA_CACHE_V2", "CLASSES_LIST_CACHE_V2", "NOTICES_LIST_CACHE_V2"]);
   } catch (e) {}
 }
 
 function getClassesList() {
+  const cache = CacheService.getScriptCache();
+  const cachedData = cache.get("CLASSES_LIST_CACHE_V2");
+  if (cachedData) {
+    try {
+      return JSON.parse(cachedData);
+    } catch (e) {}
+  }
+
   const ss = getSpreadsheet();
   let classSheet = ss.getSheetByName(SHEETS.CLASSES);
   if (!classSheet) {
@@ -286,6 +312,10 @@ function getClassesList() {
       });
     }
   });
+
+  try {
+    cache.put("CLASSES_LIST_CACHE_V2", JSON.stringify(result), 600);
+  } catch (e) {}
 
   return result;
 }

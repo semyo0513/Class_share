@@ -59,6 +59,7 @@ function saveMockStore(data) {
 const API = {
   async get(action, params = {}) {
     if (CONFIG.GAS_API_URL && CONFIG.GAS_API_URL.trim().startsWith("http")) {
+      let timeoutId;
       try {
         const url = new URL(CONFIG.GAS_API_URL);
         url.searchParams.append("action", action);
@@ -68,11 +69,24 @@ const API = {
           }
         });
 
-        const res = await fetch(url.toString(), { method: "GET" });
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 8000); // 8초 타임아웃
+
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
         const json = await res.json();
         if (json.success) return json.data;
         throw new Error(json.data?.error || json.error || json.message || "구글 시트 데이터 조회 실패");
       } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (err.name === "AbortError") {
+          console.error(`[GAS GET ${action} 타임아웃 (8초 초과)]`);
+          throw new Error("구글 시트 데이터 응답 시간이 초과되었습니다 (8초). 네트워크 상태를 확인하시거나 다시 시도해 주세요.");
+        }
         console.error(`[GAS GET ${action} 통신 실패]`, err);
         throw err;
       }
@@ -82,13 +96,19 @@ const API = {
 
   async post(action, payload = {}, adminPassword = null) {
     if (CONFIG.GAS_API_URL && CONFIG.GAS_API_URL.trim().startsWith("http")) {
+      let timeoutId;
       try {
         const bodyData = { action, payload, adminPassword };
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 15000); // 15초 타임아웃
+
         const res = await fetch(CONFIG.GAS_API_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(bodyData)
+          body: JSON.stringify(bodyData),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         const text = await res.text();
         let json;
@@ -102,6 +122,11 @@ const API = {
         const errMsg = json.data?.error || json.error || json.message || "구글 시트 처리 실패";
         throw new Error(errMsg);
       } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (err.name === "AbortError") {
+          console.error(`[GAS POST ${action} 타임아웃 (15초 초과)]`);
+          throw new Error("서버 처리 응답 시간이 초과되었습니다 (15초). 잠시 후 다시 시도해 주세요.");
+        }
         console.error(`[GAS POST ${action} 통신 실패]`, err);
         throw err;
       }
