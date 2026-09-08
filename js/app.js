@@ -6,19 +6,21 @@
 
 const LOCAL_CACHE_KEY = "SAMHYUN_LOCAL_INITIAL_CACHE_V3";
 
+const _initialData = (typeof getInitialMockStore === "function") ? getInitialMockStore() : { classes: [], notices: [], config: {} };
+
 const AppState = {
   activeTab: "classes",
-  classes: [],
-  notices: [],
-  board: [],
-  observations: [],
-  config: {},
+  classes: _initialData.classes || [],
+  notices: _initialData.notices || [],
+  board: _initialData.board || [],
+  observations: _initialData.observations || [],
+  config: _initialData.config || {},
   activeSubjectFilter: "ALL",
   activeBoardCategory: "ALL",
   searchQuery: "",
   myApplications: [],
   currentCheckUser: { password: "", name: "" },
-  isLoadingInitialData: true,
+  isLoadingInitialData: false,
   hasLoadError: false
 };
 
@@ -1112,7 +1114,11 @@ function showToast(message, type = "info") {
 
   setTimeout(() => {
     toast.classList.add("opacity-0", "translate-y-2");
-    setTimeout(() => toast.remove(), 300);
+    setTimeout(() => {
+      if (toast && toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
   }, 3500);
 }
 
@@ -1125,3 +1131,34 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// 전역 window 바인딩 (인라인 HTML 이벤트 완벽 지원)
+window.AppState = AppState;
+window.navigateTab = navigateTab;
+window.filterBySubject = filterBySubject;
+window.handleClassSearch = handleClassSearch;
+window.openApplyModal = openApplyModal;
+window.closeApplyModal = closeApplyModal;
+window.submitApplication = submitApplication;
+window.openCheckApplyModal = openCheckApplyModal;
+window.closeCheckApplyModal = closeCheckApplyModal;
+window.handleCheckApplySubmit = handleCheckApplySubmit;
+window.closeMyApplyResultModal = closeMyApplyResultModal;
+window.saveMyApplyEdit = saveMyApplyEdit;
+window.cancelMyApply = cancelMyApply;
+window.filterBoardCategory = filterBoardCategory;
+window.openBoardWriteModal = openBoardWriteModal;
+window.closeBoardWriteModal = closeBoardWriteModal;
+window.submitBoardPost = submitBoardPost;
+window.openBoardDeleteModal = openBoardDeleteModal;
+window.closeBoardDeleteModal = closeBoardDeleteModal;
+window.confirmDeleteBoardPost = confirmDeleteBoardPost;
+window.openObservationWriteModal = openObservationWriteModal;
+window.closeObservationWriteModal = closeObservationWriteModal;
+window.submitObservationLog = submitObservationLog;
+window.openObservationDeleteModal = openObservationDeleteModal;
+window.closeObservationDeleteModal = closeObservationDeleteModal;
+window.confirmDeleteObservationLog = confirmDeleteObservationLog;
+window.toggleTeacherTypeValidation = toggleTeacherTypeValidation;
+window.showToast = showToast;
+window.retryLoadInitialData = retryLoadInitialData;

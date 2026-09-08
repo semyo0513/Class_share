@@ -625,3 +625,7 @@ const API = {
     }
   }
 };
+
+window.API = API;
+window.getInitialMockStore = getInitialMockStore;
+window.saveMockStore = saveMockStore;

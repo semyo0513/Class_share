@@ -1006,5 +1006,31 @@ function readFileAsBase64(file) {
 
 function closeAdminModal(modalId) {
   const modal = document.getElementById(modalId);
-  if (modal) modal.remove();
+  if (modal) {
+    if (modal.parentNode) modal.parentNode.removeChild(modal);
+    else modal.remove();
+  }
 }
+
+// 전역 window 바인딩 (관리자 기능 완벽 지원)
+window.AdminState = AdminState;
+window.checkAdminAuthState = checkAdminAuthState;
+window.handleAdminLoginSubmit = handleAdminLoginSubmit;
+window.handleAdminLogout = handleAdminLogout;
+window.switchAdminSubTab = switchAdminSubTab;
+window.openClassFormModal = openClassFormModal;
+window.closeAdminModal = closeAdminModal;
+window.saveAdminClass = saveAdminClass;
+window.deleteAdminClass = deleteAdminClass;
+window.toggleAdminClassStatus = toggleAdminClassStatus;
+window.toggleApplicantAttendance = toggleApplicantAttendance;
+window.printApplicantsList = printApplicantsList;
+window.exportApplicantsCsv = exportApplicantsCsv;
+window.openNoticeFormModal = openNoticeFormModal;
+window.saveAdminNotice = saveAdminNotice;
+window.deleteAdminNotice = deleteAdminNotice;
+window.saveRequiredFieldsConfig = saveRequiredFieldsConfig;
+window.saveDriveFolderConfig = saveDriveFolderConfig;
+window.saveEventTitleConfig = saveEventTitleConfig;
+window.readFileAsBase64 = readFileAsBase64;
+window.handlePeriodPresetChange = handlePeriodPresetChange;

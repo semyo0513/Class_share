@@ -33,3 +33,5 @@ const CONFIG = {
     "자유소통"
   ]
 };
+
+window.CONFIG = CONFIG;
