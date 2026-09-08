@@ -19,6 +19,7 @@ const SHEETS = {
   APPLICATIONS: "Applications",
   NOTICES: "Notices",
   BOARD: "Board",
+  OBSERVATIONS: "Observations",
   CONFIG: "Config"
 };
 
@@ -53,6 +54,8 @@ function doGet(e) {
         return createJsonResponse(getNoticesList());
       case "getBoard":
         return createJsonResponse(getBoardList(params.adminPassword));
+      case "getObservations":
+        return createJsonResponse(getObservationLogsList(params.adminPassword));
       case "getConfig":
         return createJsonResponse(getConfigMap());
       case "getAdminApplications":
@@ -154,6 +157,18 @@ function doPost(e) {
           return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
         }
         return createJsonResponse(handleSaveConfig(postData.payload));
+
+      case "toggleAttendance":
+        if (!verifyAdminPassword(postData.adminPassword)) {
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
+        }
+        return createJsonResponse(handleToggleAttendance(postData.payload));
+
+      case "createObservationLog":
+        return createJsonResponse(handleCreateObservationLog(postData.payload));
+
+      case "deleteObservationLog":
+        return createJsonResponse(handleDeleteObservationLog(postData.payload, postData.adminPassword));
 
       default:
         return createJsonResponse({ error: "올바르지 않은 POST Action입니다." }, 400, false);
@@ -916,6 +931,225 @@ function handleDeleteBoardPost(payload, adminPassword) {
   throw new Error("삭제하려는 게시글을 찾을 수 없습니다.");
 }
 
+function handleToggleAttendance(payload) {
+  if (!payload || !payload.rowNum) throw new Error("신청 정보가 올바르지 않습니다.");
+
+  const ss = getSpreadsheet();
+  const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
+  if (!appSheet) throw new Error("신청 데이터 시트를 찾을 수 없습니다.");
+
+  const rowNum = Number(payload.rowNum);
+  const currentStatus = String(appSheet.getRange(rowNum, 9).getValue() || "CONFIRMED").toUpperCase();
+  const newStatus = currentStatus === "ATTENDED" ? "CONFIRMED" : "ATTENDED";
+  appSheet.getRange(rowNum, 9).setValue(newStatus);
+  clearInitialDataCache();
+
+  let emailSent = false;
+  const applicantEmail = payload.email ? String(payload.email).trim() : "";
+
+  if (newStatus === "ATTENDED" && applicantEmail !== "" && applicantEmail.includes("@")) {
+    try {
+      const eventTitle = getConfigValue("EVENT_TITLE") || "2026 삼현 수업나눔한마당";
+      const issueDate = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy년 MM월 dd일");
+      const certNo = `CERT-${Date.now().toString().slice(-6)}`;
+
+      const htmlBody = `
+        <div style="max-width: 600px; margin: 0 auto; padding: 30px; font-family: 'Pretendard', sans-serif; border: 2px solid #4f46e5; border-radius: 16px; background-color: #ffffff;">
+          <div style="text-align: center; border-bottom: 2px solid #e0e7ff; padding-bottom: 20px; margin-bottom: 25px;">
+            <h1 style="color: #312e81; font-size: 26px; margin: 0 0 8px 0; font-weight: 800;">참 관 확 인 서</h1>
+            <p style="color: #6366f1; font-size: 13px; margin: 0; font-weight: 600;">Certificate of Class Attendance</p>
+          </div>
+          
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px; color: #334155;">
+            <tr>
+              <td style="padding: 10px; font-weight: bold; width: 110px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">발급 번호</td>
+              <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">${certNo}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; font-weight: bold; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">참관자 성명</td>
+              <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #0f172a;">${payload.applicantName || "선생님"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; font-weight: bold; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">소속 학교</td>
+              <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${payload.school || "소속미입력"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; font-weight: bold; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">참관 수업명</td>
+              <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #4338ca; font-weight: bold;">${payload.className || "공개수업"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; font-weight: bold; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">행 사 명</td>
+              <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${eventTitle}</td>
+            </tr>
+          </table>
+
+          <div style="background-color: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 30px;">
+            <p style="font-size: 15px; color: #4c1d95; line-height: 1.6; margin: 0; font-weight: 600;">
+              위 사람은 ${eventTitle} 교사 공개수업에 성실히 참관하였음을 확인합니다.
+            </p>
+          </div>
+
+          <div style="text-align: center; color: #64748b; font-size: 13px;">
+            <p style="margin: 0 0 6px 0;">발급일자: <strong>${issueDate}</strong></p>
+            <p style="margin: 0; font-weight: bold; color: #1e293b; font-size: 15px;">삼현여자중학교 수업나눔한마당 운영본부</p>
+          </div>
+        </div>
+      `;
+
+      MailApp.sendEmail({
+        to: applicantEmail,
+        subject: `[참관 확인서] ${eventTitle} 참관 확인서 (${payload.applicantName || "선생님"})`,
+        htmlBody: htmlBody
+      });
+      emailSent = true;
+    } catch (mailErr) {
+      Logger.log("참관 확인서 메일 발송 실패: " + mailErr.toString());
+    }
+  }
+
+  return {
+    message: newStatus === "ATTENDED"
+      ? (emailSent ? `[${payload.applicantName} 선생님] 출석 처리되었으며 참관 확인서 이메일이 ${applicantEmail}(으)로 발송되었습니다.` : `[${payload.applicantName} 선생님] 출석 처리되었습니다. (이메일 미입력으로 메일 발송 생략)`)
+      : `[${payload.applicantName} 선생님] 출석 상태가 취소(신청완료)로 변경되었습니다.`,
+    status: newStatus,
+    emailSent: emailSent
+  };
+}
+
+function handleCreateObservationLog(payload) {
+  if (!payload || !payload.applicantName || !payload.classId || !payload.content || !payload.password) {
+    throw new Error("성명, 비밀번호, 수업 선택, 참관록 내용은 필수 입력 항목입니다.");
+  }
+
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName(SHEETS.OBSERVATIONS);
+  if (!sheet) {
+    initDatabaseSheets();
+    sheet = ss.getSheetByName(SHEETS.OBSERVATIONS);
+  }
+
+  const nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  const obsId = `OBS-${Date.now().toString().slice(-6)}`;
+  const textObsPw = "'" + String(payload.password).trim();
+
+  let fileUrl = payload.fileUrl || "";
+  let fileName = payload.fileName || "";
+
+  if (payload.fileData && payload.fileData.base64) {
+    try {
+      const targetFolder = getTargetDriveFolder();
+      const contentType = payload.fileData.mimeType || "application/octet-stream";
+      const base64Str = payload.fileData.base64.includes(",") 
+        ? payload.fileData.base64.split(",")[1] 
+        : payload.fileData.base64;
+      
+      const decodedBytes = Utilities.base64Decode(base64Str);
+      const blob = Utilities.newBlob(decodedBytes, contentType, payload.fileData.name);
+      
+      const file = targetFolder.createFile(blob);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        Logger.log("Sharing setting warning: " + shareErr.toString());
+      }
+      
+      fileUrl = file.getUrl();
+      fileName = payload.fileData.name;
+    } catch (fileErr) {
+      const errStr = fileErr.toString();
+      if (errStr.indexOf("액세스가 거부됨") !== -1 || errStr.indexOf("Access denied") !== -1 || errStr.indexOf("DriveApp") !== -1) {
+        throw new Error("구글 드라이브(DriveApp) 접근 권한이 승인되지 않았습니다. 앱스 스크립트 에디터에서 함수를 [▶ 실행]하여 구글 드라이브 권한 승인(허용)을 완료해 주세요.");
+      }
+      throw new Error("참관록 첨부파일 구글 드라이브 업로드 오류: " + errStr);
+    }
+  }
+
+  let className = "수업 참관록";
+  const classSheet = ss.getSheetByName(SHEETS.CLASSES);
+  if (classSheet) {
+    const classRows = classSheet.getDataRange().getValues();
+    for (let i = 1; i < classRows.length; i++) {
+      if (String(classRows[i][0]) === String(payload.classId)) {
+        className = `[${classRows[i][1]}] ${classRows[i][6]} (${classRows[i][2]} 선생님)`;
+        break;
+      }
+    }
+  }
+
+  sheet.appendRow([
+    obsId,
+    nowStr,
+    payload.applicantName,
+    payload.school || "",
+    payload.classId,
+    className,
+    payload.content,
+    fileUrl,
+    fileName,
+    payload.isSecret ? "TRUE" : "FALSE",
+    textObsPw
+  ]);
+
+  return { message: "참관록이 구글 드라이브 첨부파일과 함께 성공적으로 등록되었습니다." };
+}
+
+function getObservationLogsList(adminPassword) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.OBSERVATIONS);
+  if (!sheet) return [];
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  const isAdmin = verifyAdminPassword(adminPassword);
+  const rows = data.slice(1);
+
+  return rows.map(r => {
+    const isSecret = String(r[9]).toUpperCase() === "TRUE" || r[9] === true;
+    const fileUrl = r[7] || "";
+    const fileName = r[8] || "";
+
+    return {
+      id: String(r[0]),
+      createdAt: formatDateVal(r[1]),
+      applicantName: r[2],
+      school: r[3],
+      classId: r[4],
+      className: r[5],
+      content: (isSecret && !isAdmin) ? "🔒 비공개 참관록입니다. (작성자와 관리자만 확인 가능합니다)" : r[6],
+      fileUrl: (isSecret && !isAdmin) ? "" : fileUrl,
+      fileName: (isSecret && !isAdmin) ? "" : fileName,
+      isSecret: isSecret
+    };
+  }).reverse();
+}
+
+function handleDeleteObservationLog(payload, adminPassword) {
+  if (!payload || !payload.obsId || !payload.password) {
+    throw new Error("참관록 ID와 비밀번호를 입력해 주세요.");
+  }
+
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.OBSERVATIONS);
+  if (!sheet) throw new Error("참관록 시트를 찾을 수 없습니다.");
+
+  const rows = sheet.getDataRange().getValues();
+  const rawInputPw = String(payload.password).trim();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(payload.obsId)) {
+      const storedPw = rows[i][10];
+      if (!isPasswordMatch(rawInputPw, storedPw) && !verifyAdminPassword(adminPassword || payload.password)) {
+        throw new Error("비밀번호가 일치하지 않습니다.");
+      }
+      sheet.deleteRow(i + 1);
+      return { message: "참관록이 성공적으로 삭제되었습니다." };
+    }
+  }
+
+  throw new Error("삭제하려는 참관록을 찾을 수 없습니다.");
+}
+
 function getAllApplications() {
   const ss = getSpreadsheet();
   const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
@@ -1081,6 +1315,12 @@ function initDatabaseSheets() {
   if (!boardSheet) {
     boardSheet = ss.insertSheet(SHEETS.BOARD);
     boardSheet.appendRow(["id", "createdAt", "author", "school", "title", "content", "password", "category", "isSecret", "fileUrl", "fileName"]);
+  }
+
+  let obsSheet = ss.getSheetByName(SHEETS.OBSERVATIONS);
+  if (!obsSheet) {
+    obsSheet = ss.insertSheet(SHEETS.OBSERVATIONS);
+    obsSheet.appendRow(["id", "createdAt", "applicantName", "school", "classId", "className", "content", "fileUrl", "fileName", "isSecret", "password"]);
   }
 
   let configSheet = ss.getSheetByName(SHEETS.CONFIG);

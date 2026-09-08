@@ -38,6 +38,9 @@
         <button onclick="navigateTab('board')" id="tabBtn-board" class="tab-btn px-3 py-2 rounded-lg text-sm font-semibold transition-colors text-indigo-200 hover:bg-indigo-800 hover:text-white">
           <i class="fa-solid fa-comments mr-1"></i> 나눔마당
         </button>
+        <button onclick="navigateTab('observations')" id="tabBtn-observations" class="tab-btn px-3 py-2 rounded-lg text-sm font-semibold transition-colors text-indigo-200 hover:bg-indigo-800 hover:text-white">
+          <i class="fa-solid fa-file-pen mr-1"></i> 참관록 제출
+        </button>
         <button onclick="openCheckApplyModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-600 text-emerald-100 border border-emerald-500 transition-all">
           <i class="fa-solid fa-magnifying-glass-location mr-1"></i> 신청 확인/취소
         </button>
@@ -135,6 +138,26 @@
         <div class="col-span-full bg-white p-12 rounded-2xl text-center text-slate-500 border border-slate-200 space-y-3">
           <i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-600"></i>
           <p class="text-sm font-semibold">게시글 목록을 불러오는 중입니다...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 뷰 3.5: 참관록 제출 및 참관 소감 탭 -->
+    <section id="view-observations" class="tab-content hidden space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-2 border-b border-slate-200">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">수업 참관록 제출 및 소감 나눔</h2>
+          <p class="text-xs text-slate-500 mt-0.5">수업 참관 후 배운 점, 인상 깊었던 수업 요소 및 피드백을 공유해 주세요.</p>
+        </div>
+        <button onclick="openObservationWriteModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center gap-2">
+          <i class="fa-solid fa-file-pen"></i> 참관록 작성하기
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="observationListContainer">
+        <div class="col-span-full bg-white p-12 rounded-2xl text-center text-slate-500 border border-slate-200 space-y-3">
+          <i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-600"></i>
+          <p class="text-sm font-semibold">참관록 목록을 불러오는 중입니다...</p>
         </div>
       </div>
     </section>
@@ -389,6 +412,85 @@
       <div class="flex justify-end space-x-2 pt-2">
         <button onclick="closeBoardDeleteModal()" class="px-3.5 py-2 text-xs font-semibold text-slate-600">취소</button>
         <button onclick="confirmDeleteBoardPost()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 모달 5: 참관록 작성 모달 -->
+  <div id="observationWriteModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-scaleUp max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-start border-b border-slate-100 pb-4">
+        <div>
+          <h3 class="text-lg font-bold text-slate-900">📝 수업 참관록 작성</h3>
+          <p class="text-xs text-slate-500 mt-1">참관하신 수업의 배운 점, 소감 및 자료를 공유해 주세요.</p>
+        </div>
+        <button onclick="closeObservationWriteModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+
+      <form id="observationForm" onsubmit="submitObservationLog(event)" class="space-y-4 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">참관자 성명 <span class="text-rose-500">*</span></label>
+            <input type="text" id="obsApplicantName" required placeholder="예: 홍길동" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">소속 학교명</label>
+            <input type="text" id="obsSchool" placeholder="예: 삼현여자중학교" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">비밀번호 <span class="text-rose-500">*</span> (4자리 이상)</label>
+          <input type="password" id="obsPassword" required minlength="4" placeholder="추후 삭제/수정 시 사용할 비밀번호" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">참관한 수업 선택 <span class="text-rose-500">*</span></label>
+          <select id="obsClassId" required class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+            <option value="">수업을 선택해 주세요</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">참관록 내용 및 피드백 <span class="text-rose-500">*</span></label>
+          <textarea id="obsContent" required rows="5" placeholder="수업 참관 소감, 인상 깊었던 배움 활동, 수업 피드백 및 느낀 점을 자유롭게 작성해 주세요." class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">사진 / 첨부파일 업로드 (선택)</label>
+          <input type="file" id="obsFileInput" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+          <p class="text-[11px] text-slate-400 mt-1">💡 수업 현장 사진, 활동지, 자료 등을 첨부하실 수 있습니다.</p>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+          <label for="obsIsSecret" class="flex items-center gap-2 cursor-pointer text-slate-800 font-semibold">
+            <input type="checkbox" id="obsIsSecret" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+            <span>🔒 비공개로 제출 (작성자와 관리자만 확인)</span>
+          </label>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeObservationWriteModal()" class="px-4 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-slate-100 font-medium">취소</button>
+          <button type="submit" id="obsSubmitBtn" class="px-6 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all">
+            참관록 제출하기
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 모달 6: 참관록 삭제 비밀번호 확인 모달 -->
+  <div id="observationDeleteModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+      <h3 class="text-base font-bold text-slate-900">참관록 삭제 비밀번호</h3>
+      <p class="text-xs text-slate-500">참관록 제출 시 설정한 비밀번호를 입력해 주세요.</p>
+      
+      <input type="hidden" id="deleteObsId">
+      <input type="password" id="deleteObsPassword" placeholder="비밀번호 입력" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="closeObservationDeleteModal()" class="px-3.5 py-2 text-xs font-semibold text-slate-600">취소</button>
+        <button onclick="confirmDeleteObservationLog()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow">삭제</button>
       </div>
     </div>
   </div>

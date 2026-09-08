@@ -11,6 +11,7 @@ const AppState = {
   classes: [],
   notices: [],
   board: [],
+  observations: [],
   config: {},
   activeSubjectFilter: "ALL",
   activeBoardCategory: "ALL",
@@ -148,6 +149,8 @@ function navigateTab(tabName) {
     loadNoticesData();
   } else if (tabName === "board") {
     loadBoardData();
+  } else if (tabName === "observations") {
+    loadObservationLogsData();
   } else if (tabName === "admin") {
     checkAdminAuthState();
   }
@@ -864,6 +867,152 @@ async function confirmDeleteBoardPost() {
     showToast(res.message || "삭제되었습니다.", "success");
     closeBoardDeleteModal();
     await loadBoardData();
+}
+
+/* ==================================================================
+ * 참관록 제출 및 조회 모듈
+ * ================================================================== */
+async function loadObservationLogsData() {
+  try {
+    const list = await API.get("getObservations", { adminPassword: AdminState.adminPassword });
+    AppState.observations = list || [];
+    renderObservationLogs();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderObservationLogs() {
+  const container = document.getElementById("observationListContainer");
+  if (!container) return;
+
+  const list = AppState.observations || [];
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="col-span-full bg-white p-12 rounded-2xl text-center text-slate-500 border border-slate-200 text-sm">등록된 참관록이 없습니다. 첫 참관 소감을 작성해 보세요!</div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(item => `
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between ${item.isSecret ? "bg-amber-50/20 border-amber-200" : ""}">
+      <div class="space-y-2">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">${escapeHtml(item.className || "수업참관록")}</span>
+            ${item.isSecret ? `<span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200"><i class="fa-solid fa-lock mr-1"></i>비공개 참관록</span>` : ""}
+          </div>
+          <span class="text-xs text-slate-400">${item.createdAt || ""}</span>
+        </div>
+        <p class="text-xs ${item.isSecret ? "text-slate-400 italic" : "text-slate-700"} whitespace-pre-line leading-relaxed font-medium">${escapeHtml(item.content)}</p>
+        
+        ${item.fileUrl ? `
+          <div class="pt-1">
+            <a href="${item.fileUrl}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-700 font-semibold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors">
+              <i class="fa-solid fa-paperclip"></i> ${escapeHtml(item.fileName || "첨부자료/사진 다운로드")}
+            </a>
+          </div>
+        ` : ""}
+      </div>
+
+      <div class="flex justify-between items-center pt-3 border-t border-slate-100 text-xs">
+        <span class="text-slate-500 font-medium"><i class="fa-solid fa-user-pen text-slate-400 mr-1"></i> ${escapeHtml(item.applicantName)} (${escapeHtml(item.school || "소속미입력")})</span>
+        <button onclick="openObservationDeleteModal('${item.id}')" class="text-rose-500 hover:text-rose-700 font-semibold"><i class="fa-solid fa-trash-can mr-1"></i> 삭제</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openObservationWriteModal() {
+  const select = document.getElementById("obsClassId");
+  if (select) {
+    const classes = AppState.classes || [];
+    select.innerHTML = '<option value="">수업을 선택해 주세요</option>' + classes.map(c => 
+      `<option value="${c.id}">[${escapeHtml(c.subject)}] ${escapeHtml(c.topic)} (${escapeHtml(c.teacher)} 선생님)</option>`
+    ).join("");
+  }
+
+  const form = document.getElementById("observationForm");
+  if (form) form.reset();
+
+  const modal = document.getElementById("observationWriteModal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeObservationWriteModal() {
+  const modal = document.getElementById("observationWriteModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function submitObservationLog(event) {
+  event.preventDefault();
+  const btn = document.getElementById("obsSubmitBtn");
+  const orig = btn.innerHTML;
+
+  const fileInput = document.getElementById("obsFileInput");
+  let fileData = null;
+
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    try {
+      fileData = await readFileAsBase64(file);
+    } catch (e) {
+      showToast("파일 인코딩 오류가 발생했습니다.", "error");
+      return;
+    }
+  }
+
+  const payload = {
+    applicantName: document.getElementById("obsApplicantName").value.trim(),
+    school: document.getElementById("obsSchool").value.trim(),
+    password: document.getElementById("obsPassword").value.trim(),
+    classId: document.getElementById("obsClassId").value,
+    content: document.getElementById("obsContent").value.trim(),
+    isSecret: document.getElementById("obsIsSecret").checked,
+    fileData: fileData
+  };
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 제출 중...`;
+
+    const res = await API.post("createObservationLog", payload);
+    showToast(res.message || "참관록이 성공적으로 제출되었습니다.", "success");
+    closeObservationWriteModal();
+    await loadObservationLogsData();
+  } catch (err) {
+    showToast(err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function openObservationDeleteModal(obsId) {
+  document.getElementById("deleteObsId").value = obsId;
+  document.getElementById("deleteObsPassword").value = "";
+  const modal = document.getElementById("observationDeleteModal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeObservationDeleteModal() {
+  const modal = document.getElementById("observationDeleteModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function confirmDeleteObservationLog() {
+  const obsId = document.getElementById("deleteObsId").value;
+  const pw = document.getElementById("deleteObsPassword").value.trim();
+
+  if (!pw) {
+    showToast("비밀번호를 입력해 주세요.", "error");
+    return;
+  }
+
+  try {
+    const res = await API.post("deleteObservationLog", { obsId, password: pw }, AdminState.adminPassword);
+    showToast(res.message || "삭제되었습니다.", "success");
+    closeObservationDeleteModal();
+    await loadObservationLogsData();
   } catch (err) {
     showToast(err.message, "error");
   }

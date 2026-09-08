@@ -36,6 +36,7 @@ function getInitialMockStore() {
     applications: [],
     notices: [],
     board: [],
+    observations: [],
     config: {
       EVENT_TITLE: "2026 삼현 수업나눔한마당",
       IS_REGISTRATION_OPEN: "TRUE",
@@ -119,6 +120,16 @@ const API = {
         return store.notices;
       case "getBoard":
         return store.board;
+      case "getObservations": {
+        const isAdmin = params.adminPassword === CONFIG.DEMO_ADMIN_PASSWORD;
+        const list = store.observations || [];
+        return list.map(o => ({
+          ...o,
+          content: (o.isSecret && !isAdmin) ? "🔒 비공개 참관록입니다. (작성자와 관리자만 확인 가능합니다)" : o.content,
+          fileUrl: (o.isSecret && !isAdmin) ? "" : o.fileUrl,
+          fileName: (o.isSecret && !isAdmin) ? "" : o.fileName
+        }));
+      }
       case "getConfig":
         return store.config;
       case "getAdminApplications":
@@ -389,6 +400,65 @@ const API = {
         store.config[payload.key] = payload.value;
         saveMockStore(store);
         return { message: `[${payload.key}] 설정이 저장되었습니다.` };
+      }
+
+      case "toggleAttendance": {
+        if (adminPassword !== CONFIG.DEMO_ADMIN_PASSWORD) throw new Error("관리자 권한이 필요합니다.");
+        const app = store.applications.find(a => String(a.rowNum) === String(payload.rowNum) || (String(a.classId) === String(payload.classId) && a.applicantName === payload.applicantName));
+        if (app) {
+          app.status = app.status === "ATTENDED" ? "CONFIRMED" : "ATTENDED";
+        }
+        saveMockStore(store);
+        const hasEmail = payload.email && payload.email.trim() !== "";
+        return { 
+          message: hasEmail 
+            ? `[${payload.applicantName} 선생님] 출석 처리 및 참관 확인서 이메일(${payload.email})이 발송되었습니다.` 
+            : `[${payload.applicantName} 선생님] 출석 처리가 완료되었습니다. (이메일 미입력으로 메일 발송 생략)`,
+          status: app ? app.status : "ATTENDED" 
+        };
+      }
+
+      case "createObservationLog": {
+        const targetClass = store.classes.find(c => String(c.id) === String(payload.classId));
+        const className = targetClass ? `[${targetClass.subject}] ${targetClass.topic} (${targetClass.teacher} 선생님)` : "수업 참관록";
+        const nowStr = new Date().toLocaleString("sv-SE").replace("T", " ");
+
+        let fileUrl = payload.fileUrl || "";
+        let fileName = payload.fileName || "";
+        if (payload.fileData) {
+          fileName = payload.fileData.name;
+          fileUrl = "https://example.com/demo_uploaded_obs_" + encodeURIComponent(fileName);
+        }
+
+        if (!store.observations) store.observations = [];
+        store.observations.unshift({
+          id: `OBS-${Date.now().toString().slice(-6)}`,
+          createdAt: nowStr,
+          applicantName: payload.applicantName,
+          school: payload.school || "",
+          classId: payload.classId,
+          className: className,
+          content: payload.content,
+          password: payload.password,
+          isSecret: !!payload.isSecret,
+          fileUrl: fileUrl,
+          fileName: fileName
+        });
+
+        saveMockStore(store);
+        return { message: "참관록이 성공적으로 제출되었습니다." };
+      }
+
+      case "deleteObservationLog": {
+        if (!store.observations) store.observations = [];
+        const target = store.observations.find(o => String(o.id) === String(payload.obsId));
+        if (!target) throw new Error("참관록을 찾을 수 없습니다.");
+        if (target.password !== payload.password && adminPassword !== CONFIG.DEMO_ADMIN_PASSWORD) {
+          throw new Error("비밀번호가 일치하지 않습니다.");
+        }
+        store.observations = store.observations.filter(o => String(o.id) !== String(payload.obsId));
+        saveMockStore(store);
+        return { message: "참관록이 삭제되었습니다." };
       }
 
       default:

@@ -535,11 +535,12 @@ function renderApplicantTable() {
               <th class="p-3">신청 수업명</th>
               <th class="p-3">상태</th>
               <th class="p-3">비고 / 참관목적</th>
+              <th class="p-3">출석 관리 / 참관확인서</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${apps.length === 0 ? `
-              <tr><td colspan="8" class="p-8 text-center text-slate-400">접수된 신청 내역이 없습니다.</td></tr>
+              <tr><td colspan="9" class="p-8 text-center text-slate-400">접수된 신청 내역이 없습니다.</td></tr>
             ` : apps.map(a => `
               <tr class="hover:bg-slate-50 ${a.status === 'CANCELLED' ? 'bg-slate-100/70 text-slate-400 line-through' : ''}">
                 <td class="p-3 whitespace-nowrap">${a.timestamp}</td>
@@ -548,10 +549,23 @@ function renderApplicantTable() {
                 <td class="p-3 whitespace-nowrap">${escapeHtml(a.phone)}</td>
                 <td class="p-3 whitespace-nowrap">${escapeHtml(a.email)}</td>
                 <td class="p-3 font-semibold text-indigo-700 max-w-xs">${escapeHtml(a.className)}</td>
-                <td class="p-3 whitespace-nowrap font-bold ${a.status === 'CANCELLED' ? 'text-rose-500' : 'text-emerald-600'}">
-                  ${a.status === 'CANCELLED' ? '신청취소' : '신청완료'}
+                <td class="p-3 whitespace-nowrap font-bold ${a.status === 'CANCELLED' ? 'text-rose-500' : (a.status === 'ATTENDED' ? 'text-indigo-600' : 'text-emerald-600')}">
+                  ${a.status === 'CANCELLED' ? '신청취소' : (a.status === 'ATTENDED' ? '출석완료' : '신청완료')}
                 </td>
                 <td class="p-3 max-w-xs text-slate-500">${escapeHtml(a.remark || "-")}</td>
+                <td class="p-3 whitespace-nowrap">
+                  ${a.status === 'CANCELLED' ? '-' : (
+                    a.status === 'ATTENDED' ? `
+                      <button onclick="toggleApplicantAttendance(${a.rowNum}, '${a.classId}', '${escapeHtml(a.email)}', '${escapeHtml(a.applicantName)}', '${escapeHtml(a.school)}', '${escapeHtml(a.className)}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs border border-indigo-200 shadow-sm transition-all">
+                        <i class="fa-solid fa-square-check text-indigo-600 mr-1"></i> 출석완료 (확인서 발송됨)
+                      </button>
+                    ` : `
+                      <button onclick="toggleApplicantAttendance(${a.rowNum}, '${a.classId}', '${escapeHtml(a.email)}', '${escapeHtml(a.applicantName)}', '${escapeHtml(a.school)}', '${escapeHtml(a.className)}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow transition-all">
+                        <i class="fa-solid fa-envelope-circle-check mr-1"></i> 출석 체크 및 확인서 발송
+                      </button>
+                    `
+                  )}
+                </td>
               </tr>
             `).join("")}
           </tbody>
@@ -559,6 +573,19 @@ function renderApplicantTable() {
       </div>
     </div>
   `;
+}
+
+async function toggleApplicantAttendance(rowNum, classId, email, applicantName, school, className) {
+  if (!confirm(`[${applicantName} 선생님] 출석을 처리하고 참관 확인서 이메일을 발송하시겠습니까?`)) return;
+
+  try {
+    const payload = { rowNum, classId, email, applicantName, school, className };
+    const res = await API.post("toggleAttendance", payload, AdminState.adminPassword);
+    showToast(res.message || "출석 처리가 완료되었습니다.", "success");
+    await renderAdminApplicantsView();
+  } catch (err) {
+    showToast(`출석 처리 실패: ${err.message}`, "error");
+  }
 }
 
 function exportApplicantsCsv() {
