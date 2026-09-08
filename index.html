@@ -64,15 +64,15 @@
       <div class="flex items-center gap-3 bg-indigo-950/60 p-4 rounded-xl border border-indigo-700/50 text-xs">
         <div class="text-center px-3 border-r border-indigo-800">
           <p class="text-slate-400">전체 개설수업</p>
-          <p class="text-xl font-bold text-indigo-300" id="statTotalClasses">0</p>
+          <p class="text-xl font-bold text-indigo-300" id="statTotalClasses">6</p>
         </div>
         <div class="text-center px-3 border-r border-indigo-800">
           <p class="text-slate-400">총 참관 신청자</p>
-          <p class="text-xl font-bold text-emerald-400" id="statTotalApplicants">0</p>
+          <p class="text-xl font-bold text-emerald-400" id="statTotalApplicants">49</p>
         </div>
         <div class="text-center px-3">
           <p class="text-slate-400">신청 가능 수업</p>
-          <p class="text-xl font-bold text-amber-300" id="statAvailableClasses">0</p>
+          <p class="text-xl font-bold text-amber-300" id="statAvailableClasses">5</p>
         </div>
       </div>
     </div>
@@ -93,13 +93,165 @@
 
       <!-- 수업 목록 그리드 -->
       <div id="classListGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="col-span-full py-16 text-center bg-white rounded-2xl border border-slate-200 space-y-4 shadow-sm">
-          <div class="inline-flex items-center justify-center w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl">
-            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+        <!-- 1. 영어 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">영어</span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-white">신청 가능</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">Reading Aloud 활동을 통한 지문분석 및 읽기 유창성 기르기</h3>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+                <span class="font-bold text-slate-800">김O정 선생님</span> (3학년)
+              </p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <p class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-slate-400"></i><span>2026-9-11 15:00 ~ 16:30 (7-8교시)</span></p>
+              <p class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i><span>3-6교실</span></p>
+              <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5"><i class="fa-solid fa-hourglass-half text-amber-600"></i><span>마감기한: 2026-09-10 17:01:00</span></p>
+            </div>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">글을 소리 내어 읽는 과정을 통해 지문의 구조와 의미를 정확하게 파악하고 Natural Reading 유창성을 함양합니다.</p>
           </div>
-          <div class="space-y-1">
-            <p class="font-bold text-slate-800 text-base">수업 목록을 불러오는 중입니다...</p>
-            <p class="text-xs text-slate-400">잠시만 기다려 주세요 (Google Sheets 연동 중)</p>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="text-xs"><span class="text-slate-400">신청 인원: </span><span class="font-extrabold text-indigo-600">7</span><span class="text-slate-400"> / 13명</span></div>
+            <button onclick="openApplyModal('CLS-234319')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow">참관 신청하기</button>
+          </div>
+        </div>
+
+        <!-- 2. 국어 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">국어</span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-white">신청 가능</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">스노클(snorkl)을 활용한 시〈봄은〉의 근거 중심 해석과 다양한 관점의 비교 감상</h3>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+                <span class="font-bold text-slate-800">김O나 선생님</span> (3학년)
+              </p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <p class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-slate-400"></i><span>2026-9-11 15:00 ~ 16:30 (7-8교시)</span></p>
+              <p class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i><span>3-3교실</span></p>
+              <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5"><i class="fa-solid fa-hourglass-half text-amber-600"></i><span>마감기한: 2026-09-10 17:01:00</span></p>
+            </div>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">AI 음성 형성평가 도구인 스노클을 통해 시 〈봄은〉을 텍스트 근거에 기반하여 해석하고 다채로운 관점과 비교합니다.</p>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="text-xs"><span class="text-slate-400">신청 인원: </span><span class="font-extrabold text-indigo-600">9</span><span class="text-slate-400"> / 13명</span></div>
+            <button onclick="openApplyModal('CLS-234320')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow">참관 신청하기</button>
+          </div>
+        </div>
+
+        <!-- 3. 사회 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">사회</span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500 text-white">선착순 마감</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">AI 경제기자와 함께 보는 환율</h3>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+                <span class="font-bold text-slate-800">배O한 선생님</span> (3학년)
+              </p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <p class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-slate-400"></i><span>2026-9-11 15:00 ~ 16:30 (7-8교시)</span></p>
+              <p class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i><span>3-4교실</span></p>
+              <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5"><i class="fa-solid fa-hourglass-half text-amber-600"></i><span>마감기한: 2026-09-10 17:01:00</span></p>
+            </div>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">AI 경제기자 솔루션을 활용하여 환율 변동의 원리와 세계 경제 상황이 실생활에 미치는 영향을 탐구합니다.</p>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="text-xs"><span class="text-slate-400">신청 인원: </span><span class="font-extrabold text-indigo-600">13</span><span class="text-slate-400"> / 13명</span></div>
+            <button disabled class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-slate-200 text-slate-400 cursor-not-allowed">선착순 마감</button>
+          </div>
+        </div>
+
+        <!-- 4. 과학 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">과학</span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-white">신청 가능</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">스테라리움을 이용한 은하와 우주</h3>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+                <span class="font-bold text-slate-800">정O재 선생님</span> (3학년)
+              </p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <p class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-slate-400"></i><span>2026-9-11 15:00 ~ 16:30 (7-8교시)</span></p>
+              <p class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i><span>3-2교실</span></p>
+              <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5"><i class="fa-solid fa-hourglass-half text-amber-600"></i><span>마감기한: 2026-09-10 17:01:00</span></p>
+            </div>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">천문 시뮬레이션 프로그램 스테라리움으로 가상의 밤하늘을 관찰하며 은하의 구조와 우주를 체험합니다.</p>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="text-xs"><span class="text-slate-400">신청 인원: </span><span class="font-extrabold text-indigo-600">7</span><span class="text-slate-400"> / 13명</span></div>
+            <button onclick="openApplyModal('CLS-234322')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow">참관 신청하기</button>
+          </div>
+        </div>
+
+        <!-- 5. 수학 3학년 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">수학</span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-white">신청 가능</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">퀴즈로 점검하고 완성하는 삼각비와 원의 성질</h3>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+                <span class="font-bold text-slate-800">강O주 선생님</span> (3학년)
+              </p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <p class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-slate-400"></i><span>2026-9-11 15:00 ~ 16:30 (7-8교시)</span></p>
+              <p class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i><span>3-9교실</span></p>
+              <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5"><i class="fa-solid fa-hourglass-half text-amber-600"></i><span>마감기한: 2026-09-10 17:01:00</span></p>
+            </div>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">다양한 형성평가 퀴즈를 풀며 삼각비의 개념과 원의 핵심 성질을 복습하고 개념 적용력을 다집니다.</p>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="text-xs"><span class="text-slate-400">신청 인원: </span><span class="font-extrabold text-indigo-600">4</span><span class="text-slate-400"> / 13명</span></div>
+            <button onclick="openApplyModal('CLS-234323')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow">참관 신청하기</button>
+          </div>
+        </div>
+
+        <!-- 6. 수학 1학년 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">수학</span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-white">신청 가능</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-snug line-clamp-2">데스모스를 이용한 정비례 그래프의 모양 확인하기</h3>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-chalkboard-user text-indigo-600"></i>
+                <span class="font-bold text-slate-800">박O현 선생님</span> (1학년)
+              </p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <p class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-slate-400"></i><span>2026-9-11 15:00 ~ 16:30 (7-8교시)</span></p>
+              <p class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i><span>1-3교실</span></p>
+              <p class="flex items-center gap-1.5 text-amber-700 font-medium pt-0.5"><i class="fa-solid fa-hourglass-half text-amber-600"></i><span>마감기한: 2026-09-10 17:01:00</span></p>
+            </div>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">공학 도구 데스모스의 변수를 직접 조작하며 계수 변화에 따른 정비례 그래프의 시각적 특징을 이해합니다.</p>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <div class="text-xs"><span class="text-slate-400">신청 인원: </span><span class="font-extrabold text-indigo-600">9</span><span class="text-slate-400"> / 13명</span></div>
+            <button onclick="openApplyModal('CLS-234324')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow">참관 신청하기</button>
           </div>
         </div>
       </div>
@@ -114,9 +266,62 @@
         </div>
       </div>
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 divide-y divide-slate-100 overflow-hidden" id="noticeListContainer">
-        <div class="p-12 text-center text-slate-500 space-y-3">
-          <i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-600"></i>
-          <p class="text-sm font-semibold">공지사항을 불러오는 중입니다...</p>
+        <div class="p-5 hover:bg-slate-50 transition-colors space-y-2 bg-amber-50/40 border-l-4 border-amber-500">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="bg-amber-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded">📌 필독</span>
+              <h3 class="text-base font-bold text-slate-900">[공지] 2026 수업나눔 참관 신청 안내</h3>
+            </div>
+            <span class="text-xs text-slate-400 shrink-0">2026-09-04 16:42:23</span>
+          </div>
+          <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">안녕하세요. 2026 수업나눔 참관 신청을 시작합니다. &#10;많은 참여 부탁드립니다.</p>
+          <div class="pt-1">
+            <a href="https://docs.google.com/spreadsheets/d/1koU2F5wE-Oj_jMIbsa4giYllJd5Wd4eD/edit?usp=drivesdk&ouid=116488516416956517867&rtpof=true&sd=true" target="_blank" class="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+              <i class="fa-solid fa-paperclip"></i> 첨부파일 다운로드
+            </a>
+          </div>
+        </div>
+
+        <div class="p-5 hover:bg-slate-50 transition-colors space-y-2 bg-amber-50/40 border-l-4 border-amber-500">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="bg-amber-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded">📌 필독</span>
+              <h3 class="text-base font-bold text-slate-900">9월 수업나눔 교실 안내도</h3>
+            </div>
+            <span class="text-xs text-slate-400 shrink-0">2026-09-04 16:41:24</span>
+          </div>
+          <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">수업나눔 교실 안내도</p>
+          <div class="pt-1">
+            <a href="https://drive.google.com/file/d/1k-EuTB222qX9HJh5sUWb9PQ7RT0h0OXT/view?usp=drivesdk" target="_blank" class="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+              <i class="fa-solid fa-paperclip"></i> 첨부파일 다운로드
+            </a>
+          </div>
+        </div>
+
+        <div class="p-5 hover:bg-slate-50 transition-colors space-y-2 bg-amber-50/40 border-l-4 border-amber-500">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="bg-amber-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded">📌 필독</span>
+              <h3 class="text-base font-bold text-slate-900">오시는 길</h3>
+            </div>
+            <span class="text-xs text-slate-400 shrink-0">2026-08-24 13:08:40</span>
+          </div>
+          <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">오시는 길</p>
+          <div class="pt-1">
+            <a href="https://drive.google.com/file/d/1AWB-Rz90MCbjiXtuyV6m9V56_B6lRcYn/view?usp=drivesdk" target="_blank" class="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+              <i class="fa-solid fa-paperclip"></i> 첨부파일 다운로드
+            </a>
+          </div>
+        </div>
+
+        <div class="p-5 hover:bg-slate-50 transition-colors space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-bold text-slate-900">수업나눔 안내 가정통신문</h3>
+            </div>
+            <span class="text-xs text-slate-400 shrink-0">2026-09-04 16:42:34</span>
+          </div>
+          <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">수업나눔 안내 가정통신문</p>
         </div>
       </div>
     </section>
