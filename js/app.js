@@ -35,19 +35,22 @@ async function initApp() {
     if (localCache) {
       try {
         const parsed = JSON.parse(localCache);
-        AppState.classes = parsed.classes || [];
-        AppState.notices = parsed.notices || [];
-        AppState.config = parsed.config || {};
-        
-        if (AppState.config.EVENT_TITLE) {
-          const headerTitle = document.getElementById("headerTitle");
-          if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
-        }
+        if (parsed && parsed.classes) {
+          AppState.classes = parsed.classes || [];
+          AppState.notices = parsed.notices || [];
+          AppState.config = parsed.config || {};
+          AppState.isLoadingInitialData = false;
+          
+          if (AppState.config.EVENT_TITLE) {
+            const headerTitle = document.getElementById("headerTitle");
+            if (headerTitle) headerTitle.textContent = AppState.config.EVENT_TITLE;
+          }
 
-        applyAdminFieldRequirements();
-        updateHeaderStats();
-        renderSubjectFilters();
-        renderClasses();
+          applyAdminFieldRequirements();
+          updateHeaderStats();
+          renderSubjectFilters();
+          renderClasses();
+        }
       } catch (e) {}
     }
 
@@ -55,8 +58,8 @@ async function initApp() {
     renderBoardCategoryFilters();
     navigateTab(AppState.activeTab);
 
-    // 2. 서버 백그라운드 실시간 동기화 (GAS 통신)
-    await loadInitialData();
+    // 2. 서버 백그라운드 실시간 동기화 (GAS 통신 - 비동기 비차단)
+    loadInitialData();
   } catch (err) {
     showToast("초기 데이터를 불러오는데 실패하였습니다.", "error");
     console.error(err);
@@ -101,17 +104,29 @@ async function loadInitialData() {
     AppState.isLoadingInitialData = false;
     AppState.hasLoadError = true;
 
-    // 만약 로컬 캐시가 있으면 로컬 캐시로복구
+    // 만약 로컬 캐시가 있으면 로컬 캐시로 복구
     const localCache = localStorage.getItem(LOCAL_CACHE_KEY);
-    if (localCache && (!AppState.classes || AppState.classes.length === 0)) {
+    if (localCache) {
       try {
         const parsed = JSON.parse(localCache);
         AppState.classes = parsed.classes || [];
         AppState.notices = parsed.notices || [];
         AppState.config = parsed.config || {};
-        showToast("서버 연결 지연으로 이전 저장 목록을 불러왔습니다.", "warning");
+        AppState.hasLoadError = false;
       } catch (e) {}
     }
+
+    if (!AppState.classes || AppState.classes.length === 0) {
+      try {
+        const mockStore = getInitialMockStore();
+        AppState.classes = mockStore.classes || [];
+        AppState.notices = mockStore.notices || [];
+        AppState.config = mockStore.config || {};
+        AppState.hasLoadError = false;
+      } catch (e) {}
+    }
+
+    updateHeaderStats();
     renderClasses();
   }
 }
@@ -714,6 +729,7 @@ async function loadNoticesData() {
     renderNotices();
   } catch (e) {
     console.error(e);
+    renderNotices();
   }
 }
 
@@ -756,6 +772,7 @@ async function loadBoardData() {
     renderBoard();
   } catch (e) {
     console.error(e);
+    renderBoard();
   }
 }
 
@@ -922,6 +939,7 @@ async function loadObservationLogsData() {
     renderObservationLogs();
   } catch (e) {
     console.error(e);
+    renderObservationLogs();
   }
 }
 

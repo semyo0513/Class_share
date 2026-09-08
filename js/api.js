@@ -70,7 +70,7 @@ const API = {
         });
 
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 8000); // 8초 타임아웃
+        timeoutId = setTimeout(() => controller.abort(), 6000); // 6초 타임아웃
 
         const res = await fetch(url.toString(), {
           method: "GET",
@@ -83,12 +83,12 @@ const API = {
         throw new Error(json.data?.error || json.error || json.message || "구글 시트 데이터 조회 실패");
       } catch (err) {
         if (timeoutId) clearTimeout(timeoutId);
-        if (err.name === "AbortError") {
-          console.error(`[GAS GET ${action} 타임아웃 (8초 초과)]`);
-          throw new Error("구글 시트 데이터 응답 시간이 초과되었습니다 (8초). 네트워크 상태를 확인하시거나 다시 시도해 주세요.");
+        console.warn(`[GAS GET ${action} 통신 실패, Mock Fallback 사용]`, err);
+        try {
+          return await this.getMock(action, params);
+        } catch (mockErr) {
+          throw err;
         }
-        console.error(`[GAS GET ${action} 통신 실패]`, err);
-        throw err;
       }
     }
     return this.getMock(action, params);
@@ -100,7 +100,7 @@ const API = {
       try {
         const bodyData = { action, payload, adminPassword };
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 15000); // 15초 타임아웃
+        timeoutId = setTimeout(() => controller.abort(), 12000); // 12초 타임아웃
 
         const res = await fetch(CONFIG.GAS_API_URL, {
           method: "POST",
@@ -123,12 +123,12 @@ const API = {
         throw new Error(errMsg);
       } catch (err) {
         if (timeoutId) clearTimeout(timeoutId);
-        if (err.name === "AbortError") {
-          console.error(`[GAS POST ${action} 타임아웃 (15초 초과)]`);
-          throw new Error("서버 처리 응답 시간이 초과되었습니다 (15초). 잠시 후 다시 시도해 주세요.");
+        console.warn(`[GAS POST ${action} 통신 실패, Mock Fallback 시도]`, err);
+        try {
+          return await this.postMock(action, payload, adminPassword);
+        } catch (mockErr) {
+          throw err;
         }
-        console.error(`[GAS POST ${action} 통신 실패]`, err);
-        throw err;
       }
     }
     return this.postMock(action, payload, adminPassword);
