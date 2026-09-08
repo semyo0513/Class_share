@@ -927,6 +927,9 @@ async function confirmDeleteBoardPost() {
     showToast(res.message || "삭제되었습니다.", "success");
     closeBoardDeleteModal();
     await loadBoardData();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
 }
 
 /* ==================================================================
