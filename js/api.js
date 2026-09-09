@@ -577,6 +577,26 @@ const API = {
         };
       }
 
+      case "batchToggleAttendance": {
+        if (adminPassword !== CONFIG.DEMO_ADMIN_PASSWORD) throw new Error("관리자 권한이 필요합니다.");
+        const items = payload.items || [];
+        let successCount = 0;
+        items.forEach(item => {
+          const app = store.applications.find(a => String(a.rowNum) === String(item.rowNum) || (String(a.classId) === String(item.classId) && a.applicantName === item.applicantName));
+          if (app) {
+            app.status = "ATTENDED";
+            successCount++;
+          }
+        });
+        saveMockStore(store);
+        return {
+          total: items.length,
+          successCount: successCount,
+          failCount: 0,
+          message: `총 ${items.length}명 중 ${successCount}명 출석 처리 및 확인서 발송 완료`
+        };
+      }
+
       case "createObservationLog": {
         const targetClass = store.classes.find(c => String(c.id) === String(payload.classId));
         const className = targetClass ? `[${targetClass.subject}] ${targetClass.topic} (${targetClass.teacher} 선생님)` : "수업 참관록";

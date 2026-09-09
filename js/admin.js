@@ -506,43 +506,80 @@ async function renderAdminApplicantsView() {
 function renderApplicantTable() {
   const container = document.getElementById("adminSubContent");
   const apps = AdminState.applications || [];
+  const validApps = apps.filter(a => a.status !== "CANCELLED");
+  const attendedCount = validApps.filter(a => a.status === "ATTENDED").length;
+  const pendingCount = validApps.filter(a => a.status !== "ATTENDED").length;
 
   container.innerHTML = `
     <div class="space-y-4">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <!-- 상단 툴바 & 일괄 발송 버튼 그룹 -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
-          <h3 class="text-sm font-bold text-slate-800">전체 참관 신청자 명단 (${apps.length}명)</h3>
+          <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-users text-indigo-600"></i> 참관 신청자 명단
+            <span class="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-bold">전체 ${apps.length}명</span>
+          </h3>
+          <p class="text-xs text-slate-500 mt-1">
+            출석 완료: <strong class="text-indigo-600">${attendedCount}명</strong> / 
+            미출석(대기): <strong class="text-amber-600">${pendingCount}명</strong>
+          </p>
         </div>
-        <div class="flex gap-2">
-          <button onclick="printApplicantsList()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow">
-            <i class="fa-solid fa-print"></i> 명단 인쇄
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- 일괄 발송 버튼들 -->
+          <button id="btnBulkSendSelected" onclick="sendBulkAttendanceToSelected()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fa-solid fa-square-check"></i> <span id="selectedCountText">선택 항목(0명) 일괄 발송</span>
           </button>
-          <button onclick="exportApplicantsCsv()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow">
-            <i class="fa-solid fa-file-excel"></i> 엑셀(CSV) 다운로드
+          <button onclick="sendBulkAttendanceToAllUnsent()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition-all">
+            <i class="fa-solid fa-paper-plane"></i> 미출석자 전체 일괄 발송 (${pendingCount}명)
+          </button>
+
+          <!-- 유틸리티 버튼들 -->
+          <button onclick="printApplicantsList()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow">
+            <i class="fa-solid fa-print"></i> 인쇄
+          </button>
+          <button onclick="exportApplicantsCsv()" class="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow">
+            <i class="fa-solid fa-file-excel"></i> 엑셀(CSV)
           </button>
         </div>
       </div>
 
-      <div class="overflow-x-auto border border-slate-200 rounded-xl">
+      <!-- 명단 테이블 -->
+      <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left text-xs text-slate-600">
           <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-3">신청일시</th>
-              <th class="p-3">성명</th>
-              <th class="p-3">소속 학교</th>
-              <th class="p-3">연락처</th>
-              <th class="p-3">이메일</th>
-              <th class="p-3">신청 수업명</th>
-              <th class="p-3">상태</th>
-              <th class="p-3">비고 / 참관목적</th>
-              <th class="p-3">출석 관리 / 참관확인서</th>
+              <th class="p-3 text-center w-10">
+                <input type="checkbox" id="selectAllApplicants" onchange="toggleSelectAllApplicants(this.checked)" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" title="전체 선택/해제">
+              </th>
+              <th class="p-3 whitespace-nowrap">신청일시</th>
+              <th class="p-3 whitespace-nowrap">성명</th>
+              <th class="p-3 whitespace-nowrap">소속 학교</th>
+              <th class="p-3 whitespace-nowrap">연락처</th>
+              <th class="p-3 whitespace-nowrap">이메일</th>
+              <th class="p-3 whitespace-nowrap">신청 수업명</th>
+              <th class="p-3 whitespace-nowrap">상태</th>
+              <th class="p-3 whitespace-nowrap">비고 / 참관목적</th>
+              <th class="p-3 whitespace-nowrap text-center">출석 관리 / 개별 발송</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${apps.length === 0 ? `
-              <tr><td colspan="9" class="p-8 text-center text-slate-400">접수된 신청 내역이 없습니다.</td></tr>
+              <tr><td colspan="10" class="p-8 text-center text-slate-400">접수된 신청 내역이 없습니다.</td></tr>
             ` : apps.map(a => `
-              <tr class="hover:bg-slate-50 ${a.status === 'CANCELLED' ? 'bg-slate-100/70 text-slate-400 line-through' : ''}">
+              <tr class="hover:bg-slate-50/80 transition-colors ${a.status === 'CANCELLED' ? 'bg-slate-100/70 text-slate-400 line-through' : ''}">
+                <td class="p-3 text-center">
+                  <input type="checkbox" class="applicant-checkbox w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" 
+                    data-row="${a.rowNum}" 
+                    data-class-id="${a.classId}" 
+                    data-email="${escapeHtml(a.email)}" 
+                    data-name="${escapeHtml(a.applicantName)}" 
+                    data-school="${escapeHtml(a.school)}" 
+                    data-classname="${escapeHtml(a.className)}" 
+                    data-status="${a.status}"
+                    ${a.status === 'CANCELLED' ? 'disabled' : ''}
+                    onchange="updateApplicantSelectionCount()">
+                </td>
                 <td class="p-3 whitespace-nowrap">${a.timestamp}</td>
                 <td class="p-3 font-bold text-slate-900 whitespace-nowrap">${escapeHtml(a.applicantName)}</td>
                 <td class="p-3 font-medium text-slate-800 whitespace-nowrap">${escapeHtml(a.school)}</td>
@@ -553,11 +590,11 @@ function renderApplicantTable() {
                   ${a.status === 'CANCELLED' ? '신청취소' : (a.status === 'ATTENDED' ? '출석완료' : '신청완료')}
                 </td>
                 <td class="p-3 max-w-xs text-slate-500">${escapeHtml(a.remark || "-")}</td>
-                <td class="p-3 whitespace-nowrap">
+                <td class="p-3 whitespace-nowrap text-center">
                   ${a.status === 'CANCELLED' ? '-' : (
                     a.status === 'ATTENDED' ? `
                       <button onclick="toggleApplicantAttendance(${a.rowNum}, '${a.classId}', '${escapeHtml(a.email)}', '${escapeHtml(a.applicantName)}', '${escapeHtml(a.school)}', '${escapeHtml(a.className)}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs border border-indigo-200 shadow-sm transition-all">
-                        <i class="fa-solid fa-square-check text-indigo-600 mr-1"></i> 출석완료 (확인서 발송됨)
+                        <i class="fa-solid fa-square-check text-indigo-600 mr-1"></i> 출석완료 (확인서 재발송/취소)
                       </button>
                     ` : `
                       <button onclick="toggleApplicantAttendance(${a.rowNum}, '${a.classId}', '${escapeHtml(a.email)}', '${escapeHtml(a.applicantName)}', '${escapeHtml(a.school)}', '${escapeHtml(a.className)}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow transition-all">
@@ -573,6 +610,185 @@ function renderApplicantTable() {
       </div>
     </div>
   `;
+
+  updateApplicantSelectionCount();
+}
+
+function toggleSelectAllApplicants(isChecked) {
+  const checkboxes = document.querySelectorAll(".applicant-checkbox:not(:disabled)");
+  checkboxes.forEach(cb => {
+    cb.checked = isChecked;
+  });
+  updateApplicantSelectionCount();
+}
+
+function updateApplicantSelectionCount() {
+  const checkboxes = document.querySelectorAll(".applicant-checkbox:checked");
+  const count = checkboxes.length;
+  const countText = document.getElementById("selectedCountText");
+  const btn = document.getElementById("btnBulkSendSelected");
+  
+  if (countText) {
+    countText.innerText = `선택 항목(${count}명) 일괄 발송`;
+  }
+  if (btn) {
+    btn.disabled = count === 0;
+  }
+}
+
+function getSelectedApplicants() {
+  const checkboxes = document.querySelectorAll(".applicant-checkbox:checked");
+  const items = [];
+  checkboxes.forEach(cb => {
+    items.push({
+      rowNum: parseInt(cb.getAttribute("data-row"), 10),
+      classId: cb.getAttribute("data-class-id"),
+      email: cb.getAttribute("data-email"),
+      applicantName: cb.getAttribute("data-name"),
+      school: cb.getAttribute("data-school"),
+      className: cb.getAttribute("data-classname"),
+      status: cb.getAttribute("data-status")
+    });
+  });
+  return items;
+}
+
+async function sendBulkAttendanceToSelected() {
+  const selected = getSelectedApplicants();
+  if (selected.length === 0) {
+    showToast("선택된 신청자가 없습니다. 체크박스를 선택해주세요.", "warning");
+    return;
+  }
+
+  if (!confirm(`선택한 ${selected.length}명의 교사에게 출석 처리를 진행하고 참관 확인서(PDF) 이메일을 일괄 발송하시겠습니까?`)) {
+    return;
+  }
+
+  await executeBulkAttendanceSending(selected, `선택 ${selected.length}명 일괄 발송`);
+}
+
+async function sendBulkAttendanceToAllUnsent() {
+  const apps = AdminState.applications || [];
+  const unsent = apps.filter(a => a.status !== "CANCELLED" && a.status !== "ATTENDED");
+
+  if (unsent.length === 0) {
+    showToast("발송 대상인 미출석 신청자가 없습니다.", "info");
+    return;
+  }
+
+  if (!confirm(`현재 미출석 상태인 ${unsent.length}명 전체에게 출석 처리를 진행하고 참관 확인서(PDF) 이메일을 일괄 발송하시겠습니까?`)) {
+    return;
+  }
+
+  const items = unsent.map(a => ({
+    rowNum: a.rowNum,
+    classId: a.classId,
+    email: a.email,
+    applicantName: a.applicantName,
+    school: a.school,
+    className: a.className
+  }));
+
+  await executeBulkAttendanceSending(items, `미출석자 전체(${items.length}명) 일괄 발송`);
+}
+
+async function executeBulkAttendanceSending(items, title) {
+  // 모달 생성 및 표시
+  let modal = document.getElementById("bulkSendModal");
+  if (modal) modal.remove();
+
+  modal = document.createElement("div");
+  modal.id = "bulkSendModal";
+  modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in";
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-paper-plane text-indigo-600"></i> ${title}
+        </h4>
+        <span id="bulkProgressFraction" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+          0 / ${items.length}
+        </span>
+      </div>
+      
+      <div class="space-y-2">
+        <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+          <div id="bulkProgressBar" class="bg-indigo-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p id="bulkCurrentStatus" class="text-xs text-slate-500 font-medium truncate">발송 준비 중...</p>
+      </div>
+
+      <div id="bulkLogContainer" class="bg-slate-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-1.5 text-xs text-slate-600 font-mono border border-slate-200/60">
+        <div class="text-slate-400 italic">발송을 시작합니다...</div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button id="bulkCloseBtn" disabled onclick="closeBulkSendModal()" class="px-4 py-2 bg-slate-200 text-slate-400 font-bold rounded-xl text-xs transition-all">
+          발송 진행 중...
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const progressBar = document.getElementById("bulkProgressBar");
+  const fraction = document.getElementById("bulkProgressFraction");
+  const currentStatus = document.getElementById("bulkCurrentStatus");
+  const logContainer = document.getElementById("bulkLogContainer");
+  const closeBtn = document.getElementById("bulkCloseBtn");
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const currentNum = i + 1;
+    const pct = Math.round((currentNum / items.length) * 100);
+
+    progressBar.style.width = `${pct}%`;
+    fraction.innerText = `${currentNum} / ${items.length}`;
+    currentStatus.innerText = `[${item.applicantName} 선생님] 출석 처리 및 확인서 생성 중... (${item.email || '이메일 없음'})`;
+
+    try {
+      const payload = {
+        rowNum: item.rowNum,
+        classId: item.classId,
+        email: item.email,
+        applicantName: item.applicantName,
+        school: item.school,
+        className: item.className
+      };
+      const res = await API.post("toggleAttendance", payload, AdminState.adminPassword);
+      successCount++;
+
+      const logItem = document.createElement("div");
+      logItem.className = "flex items-center gap-1.5 text-emerald-700";
+      logItem.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500"></i> [${item.applicantName}] ${res.message || '완료'}`;
+      logContainer.appendChild(logItem);
+    } catch (err) {
+      failCount++;
+      const logItem = document.createElement("div");
+      logItem.className = "flex items-center gap-1.5 text-rose-600";
+      logItem.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-500"></i> [${item.applicantName}] 실패: ${err.message}`;
+      logContainer.appendChild(logItem);
+    }
+
+    logContainer.scrollTop = logContainer.scrollHeight;
+  }
+
+  // 완료 상태 표시
+  progressBar.className = "bg-emerald-600 h-3 rounded-full transition-all duration-300";
+  currentStatus.innerHTML = `<strong class="text-emerald-700">🎉 발송 완료!</strong> (성공: ${successCount}건 / 실패·생략: ${failCount}건)`;
+  closeBtn.disabled = false;
+  closeBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow transition-all cursor-pointer";
+  closeBtn.innerText = "확인 및 닫기";
+
+  await renderAdminApplicantsView();
+}
+
+function closeBulkSendModal() {
+  const modal = document.getElementById("bulkSendModal");
+  if (modal) modal.remove();
 }
 
 async function toggleApplicantAttendance(rowNum, classId, email, applicantName, school, className) {

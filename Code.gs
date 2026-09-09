@@ -211,6 +211,12 @@ function doPost(e) {
         }
         return createJsonResponse(handleToggleAttendance(postData.payload));
 
+      case "batchToggleAttendance":
+        if (!verifyAdminPassword(postData.adminPassword)) {
+          return createJsonResponse({ error: "관리자 인증 실패" }, 401, false);
+        }
+        return createJsonResponse(handleBatchToggleAttendance(postData.payload));
+
       case "createObservationLog":
         return createJsonResponse(handleCreateObservationLog(postData.payload));
 
@@ -1316,6 +1322,36 @@ function handleToggleAttendance(payload) {
   }
 }
 
+function handleBatchToggleAttendance(payload) {
+  if (!payload || !payload.items || !Array.isArray(payload.items) || payload.items.length === 0) {
+    throw new Error("출석 처리할 신청자 목록(items)이 전달되지 않았습니다.");
+  }
+
+  const results = [];
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < payload.items.length; i++) {
+    const item = payload.items[i];
+    try {
+      const res = handleToggleAttendance(item);
+      results.push({ item: item, success: true, result: res });
+      if (res.status === "ATTENDED") successCount++;
+    } catch (err) {
+      failCount++;
+      results.push({ item: item, success: false, error: err.toString() });
+    }
+  }
+
+  return {
+    total: payload.items.length,
+    successCount: successCount,
+    failCount: failCount,
+    message: `총 ${payload.items.length}명 중 ${successCount}명 출석 처리 및 확인서 발송 완료 (오류/생략: ${failCount}건)`,
+    details: results
+  };
+}
+
 /**
  * 참관 확인서 Google Docs 템플릿 기반 PDF 생성 및 이메일 발송
  */
@@ -1328,6 +1364,7 @@ function generateAttendanceCertificate(applicantName, school, className, classDa
   const trainingName = "배움중심수업 나눔중심학교 수업나눔의 날";
   const trainingLocation = "삼현여자중학교";
   const trainingDate = classDateTime || "2026-9-11 15:00 ~ 16:30";
+  const issueDate = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy년 M월 d일");
 
   let tempFile = null;
   try {
@@ -1338,22 +1375,34 @@ function generateAttendanceCertificate(applicantName, school, className, classDa
     const body = doc.getBody();
 
     // 템플릿 태그 치환 (공백 포함 정규식 패턴)
+    body.replaceText("\\{\\{\\s*학교성명\\s*\\}\\}", school || "");
+    body.replaceText("\\{\\{\\s*소속학교\\s*\\}\\}", school || "");
+    body.replaceText("\\{\\{\\s*소속\\s*\\}\\}", school || "");
     body.replaceText("\\{\\{\\s*교사성명\\s*\\}\\}", applicantName || "");
+    body.replaceText("\\{\\{\\s*참관자\\s*\\}\\}", applicantName || "");
     body.replaceText("\\{\\{\\s*참관수업명\\s*\\}\\}", className || "");
+    body.replaceText("\\{\\{\\s*수업명\\s*\\}\\}", className || "");
     body.replaceText("\\{\\{\\s*참석일자\\s*\\}\\}", trainingDate);
     body.replaceText("\\{\\{\\s*연수명\\s*\\}\\}", trainingName);
     body.replaceText("\\{\\{\\s*장소\\s*\\}\\}", trainingLocation);
-    body.replaceText("\\{\\{\\s*소속학교\\s*\\}\\}", school || "");
-    body.replaceText("\\{\\{\\s*소속\\s*\\}\\}", school || "");
+    body.replaceText("\\{\\{\\s*발급일\\s*\\}\\}", issueDate);
+    body.replaceText("\\{\\{\\s*발급일자\\s*\\}\\}", issueDate);
+    body.replaceText("\\{\\{\\s*발급날짜\\s*\\}\\}", issueDate);
 
     // 단순 문자열 치환 백업
+    body.replaceText("{{학교성명}}", school || "");
+    body.replaceText("{{소속학교}}", school || "");
+    body.replaceText("{{소속}}", school || "");
     body.replaceText("{{교사성명}}", applicantName || "");
+    body.replaceText("{{참관자}}", applicantName || "");
     body.replaceText("{{참관수업명}}", className || "");
+    body.replaceText("{{수업명}}", className || "");
     body.replaceText("{{참석일자}}", trainingDate);
     body.replaceText("{{연수명}}", trainingName);
     body.replaceText("{{장소}}", trainingLocation);
-    body.replaceText("{{소속학교}}", school || "");
-    body.replaceText("{{소속}}", school || "");
+    body.replaceText("{{발급일}}", issueDate);
+    body.replaceText("{{발급일자}}", issueDate);
+    body.replaceText("{{발급날짜}}", issueDate);
 
     doc.saveAndClose();
 
@@ -1376,8 +1425,12 @@ function generateAttendanceCertificate(applicantName, school, className, classDa
         <div style="background-color: #f8fafc; border-radius: 8px; padding: 18px; margin: 20px 0; border-left: 4px solid #4f46e5;">
           <table style="width: 100%; font-size: 14px; color: #334155; border-collapse: collapse;">
             <tr>
-              <td style="padding: 6px 0; font-weight: bold; width: 100px;">참관자 성명:</td>
-              <td style="padding: 6px 0;">${applicantName} 선생님 (${school || '소속 미입력'})</td>
+              <td style="padding: 6px 0; font-weight: bold; width: 100px;">소 속:</td>
+              <td style="padding: 6px 0;">${school || '소속 미입력'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">참관자 성명:</td>
+              <td style="padding: 6px 0;">${applicantName} 선생님</td>
             </tr>
             <tr>
               <td style="padding: 6px 0; font-weight: bold;">연 수 명:</td>
@@ -1394,6 +1447,10 @@ function generateAttendanceCertificate(applicantName, school, className, classDa
             <tr>
               <td style="padding: 6px 0; font-weight: bold;">참석 일시:</td>
               <td style="padding: 6px 0;">${trainingDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">발급 일자:</td>
+              <td style="padding: 6px 0; color: #64748b;">${issueDate}</td>
             </tr>
           </table>
         </div>
