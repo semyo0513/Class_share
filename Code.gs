@@ -13,6 +13,7 @@
  */
 
 const SPREADSHEET_ID = "1iQnVQPQf260BkTV1vrN4ZgtGEM1aybBMO2wB089HD_0";
+const CERT_TEMPLATE_DOC_ID = "1yeKY8DQzxj3CxRzolcsLJSM6XWpk2Ggd2IWFKr2prvQ";
 
 const SHEETS = {
   CLASSES: "Classes",
@@ -1201,6 +1202,205 @@ function getAllApplications() {
     remark: r[7],
     status: r[8]
   }));
+}
+
+function handleToggleAttendance(payload) {
+  if (!payload || !payload.rowNum) {
+    throw new Error("출석 처리할 신청자 행 번호(rowNum)가 전달되지 않았습니다.");
+  }
+
+  const ss = getSpreadsheet();
+  const appSheet = ss.getSheetByName(SHEETS.APPLICATIONS);
+  if (!appSheet) throw new Error("신청 목록 시트를 찾을 수 없습니다.");
+
+  const rowNum = parseInt(payload.rowNum, 10);
+  const totalRows = appSheet.getLastRow();
+  if (rowNum < 2 || rowNum > totalRows) {
+    throw new Error("유효하지 않은 행 번호입니다.");
+  }
+
+  const rowValues = appSheet.getRange(rowNum, 1, 1, 10).getValues()[0];
+  const applicantName = String(rowValues[1] || payload.applicantName || "").trim();
+  const school = String(rowValues[2] || payload.school || "").trim();
+  const email = String(rowValues[4] || payload.email || "").trim();
+  const classId = String(rowValues[5] || payload.classId || "").trim();
+  let className = String(rowValues[6] || payload.className || "").trim();
+  const currentStatus = String(rowValues[8] || "").toUpperCase();
+
+  // 수업 일시(dateTime) 조회
+  let classDateTime = "";
+  try {
+    const classSheet = ss.getSheetByName(SHEETS.CLASSES);
+    if (classSheet) {
+      const classRows = classSheet.getDataRange().getValues();
+      for (let i = 1; i < classRows.length; i++) {
+        if (String(classRows[i][0]) === classId) {
+          classDateTime = String(classRows[i][4] || "");
+          if (!className) {
+            className = `[${classRows[i][1]}] ${classRows[i][6]} (${classRows[i][2]} 선생님)`;
+          }
+          break;
+        }
+      }
+    }
+  } catch (err) {
+    Logger.log("수업 일시 조회 중 오류: " + err.toString());
+  }
+
+  if (!classDateTime) {
+    classDateTime = "2026-9-11 15:00 ~ 16:30";
+  }
+
+  // 상태 토글 처리
+  if (currentStatus === "ATTENDED") {
+    appSheet.getRange(rowNum, 9).setValue("CONFIRMED");
+    return {
+      success: true,
+      status: "CONFIRMED",
+      message: `[${applicantName} 선생님] 출석 상태가 취소(미출석)되었습니다.`
+    };
+  } else {
+    appSheet.getRange(rowNum, 9).setValue("ATTENDED");
+
+    // 이메일 발송
+    if (email && email.includes("@")) {
+      const certResult = generateAttendanceCertificate(applicantName, school, className, classDateTime, email);
+      if (certResult.sent) {
+        return {
+          success: true,
+          status: "ATTENDED",
+          message: `[${applicantName} 선생님] 출석 처리 및 참관 확인서 이메일 발송이 완료되었습니다. (${email})`
+        };
+      } else {
+        return {
+          success: true,
+          status: "ATTENDED",
+          message: `[${applicantName} 선생님] 출석 처리 완료 (이메일 발송 실패: ${certResult.error || certResult.reason})`
+        };
+      }
+    } else {
+      return {
+        success: true,
+        status: "ATTENDED",
+        message: `[${applicantName} 선생님] 출석 처리되었습니다. (등록된 이메일이 없어 메일 발송 생략)`
+      };
+    }
+  }
+}
+
+/**
+ * 참관 확인서 Google Docs 템플릿 기반 PDF 생성 및 이메일 발송
+ */
+function generateAttendanceCertificate(applicantName, school, className, classDateTime, applicantEmail) {
+  if (!applicantEmail || applicantEmail.trim() === "" || !applicantEmail.includes("@")) {
+    return { sent: false, reason: "이메일 주소 없음" };
+  }
+
+  const templateId = CERT_TEMPLATE_DOC_ID;
+  const trainingName = "배움중심수업 나눔중심학교 수업나눔의 날";
+  const trainingLocation = "삼현여자중학교";
+  const trainingDate = classDateTime || "2026-9-11 15:00 ~ 16:30";
+
+  let tempFile = null;
+  try {
+    const templateFile = DriveApp.getFileById(templateId);
+    tempFile = templateFile.makeCopy(`[참관확인서]_${applicantName}_${new Date().getTime()}`);
+    const tempDocId = tempFile.getId();
+    const doc = DocumentApp.openById(tempDocId);
+    const body = doc.getBody();
+
+    // 템플릿 태그 치환 (공백 포함 정규식 패턴)
+    body.replaceText("\\{\\{\\s*교사성명\\s*\\}\\}", applicantName || "");
+    body.replaceText("\\{\\{\\s*참관수업명\\s*\\}\\}", className || "");
+    body.replaceText("\\{\\{\\s*참석일자\\s*\\}\\}", trainingDate);
+    body.replaceText("\\{\\{\\s*연수명\\s*\\}\\}", trainingName);
+    body.replaceText("\\{\\{\\s*장소\\s*\\}\\}", trainingLocation);
+    body.replaceText("\\{\\{\\s*소속학교\\s*\\}\\}", school || "");
+    body.replaceText("\\{\\{\\s*소속\\s*\\}\\}", school || "");
+
+    // 단순 문자열 치환 백업
+    body.replaceText("{{교사성명}}", applicantName || "");
+    body.replaceText("{{참관수업명}}", className || "");
+    body.replaceText("{{참석일자}}", trainingDate);
+    body.replaceText("{{연수명}}", trainingName);
+    body.replaceText("{{장소}}", trainingLocation);
+    body.replaceText("{{소속학교}}", school || "");
+    body.replaceText("{{소속}}", school || "");
+
+    doc.saveAndClose();
+
+    const pdfBlob = tempFile.getAs(MimeType.PDF).setName(`참관확인서_${applicantName}선생님.pdf`);
+
+    const emailSubject = `[삼현여자중학교] 수업나눔의 날 참관 확인서 (${applicantName} 선생님)`;
+    const emailBodyHtml = `
+      <div style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 25px;">
+          <h2 style="color: #4f46e5; margin: 0 0 10px 0; font-size: 22px;">수업나눔의 날 참관 확인서</h2>
+          <p style="color: #64748b; font-size: 14px; margin: 0;">삼현여자중학교 배움중심수업 나눔중심학교</p>
+        </div>
+        
+        <p style="font-size: 15px; line-height: 1.6; color: #334155;">
+          안녕하세요, <strong>${applicantName}</strong> 선생님.<br>
+          삼현여자중학교 <strong>배움중심수업 나눔중심학교 수업나눔의 날</strong>에 참석해 주셔서 진심으로 감사드립니다.<br>
+          선생님의 참관 확인서를 첨부파일(PDF)로 보내드립니다.
+        </p>
+        
+        <div style="background-color: #f8fafc; border-radius: 8px; padding: 18px; margin: 20px 0; border-left: 4px solid #4f46e5;">
+          <table style="width: 100%; font-size: 14px; color: #334155; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold; width: 100px;">참관자 성명:</td>
+              <td style="padding: 6px 0;">${applicantName} 선생님 (${school || '소속 미입력'})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">연 수 명:</td>
+              <td style="padding: 6px 0;">${trainingName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">장 소:</td>
+              <td style="padding: 6px 0;">${trainingLocation}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">참관 수업명:</td>
+              <td style="padding: 6px 0; color: #4f46e5; font-weight: bold;">${className}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">참석 일시:</td>
+              <td style="padding: 6px 0;">${trainingDate}</td>
+            </tr>
+          </table>
+        </div>
+        
+        <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-top: 20px;">
+          ※ 본 메일의 첨부파일(PDF)을 다운로드하여 참관 확인서로 활용하시기 바랍니다.<br>
+          문의사항이 있으시면 삼현여자중학교로 연락 주시기 바랍니다.
+        </p>
+        
+        <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 12px;">
+          삼현여자중학교 배움중심수업 나눔마당 운영팀
+        </div>
+      </div>
+    `;
+
+    MailApp.sendEmail({
+      to: applicantEmail.trim(),
+      subject: emailSubject,
+      htmlBody: emailBodyHtml,
+      attachments: [pdfBlob]
+    });
+
+    return { sent: true, recipient: applicantEmail.trim() };
+  } catch (err) {
+    Logger.log(`[Certificate Send Error] ${err.toString()}`);
+    return { sent: false, error: err.toString() };
+  } finally {
+    if (tempFile) {
+      try {
+        tempFile.setTrashed(true);
+      } catch (e) {
+        Logger.log(`임시 파일 삭제 실패: ${e.toString()}`);
+      }
+    }
+  }
 }
 
 /* ==================================================================
