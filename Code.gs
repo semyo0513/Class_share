@@ -408,6 +408,9 @@ function handleApplyClass(payload) {
         id: String(classRows[i][0]),
         subject: classRows[i][1],
         teacher: classRows[i][2],
+        gradeGroup: classRows[i][3],
+        dateTime: classRows[i][4] ? formatDateVal(classRows[i][4]) : "",
+        location: String(classRows[i][5] || ""),
         topic: classRows[i][6],
         name: `[${classRows[i][1]}] ${classRows[i][6]} (${classRows[i][2]} 선생님)`,
         capacity: Number(classRows[i][8]) || 0,
@@ -504,15 +507,103 @@ function handleApplyClass(payload) {
     }
   }
 
+  // ✉️ 신청 확인 이메일 발송
+  let emailSent = false;
+  if (email && String(email).trim() !== "" && String(email).includes("@")) {
+    emailSent = sendApplicationConfirmationEmail(applicantName, school, targetClass, email, remark);
+  }
+
   clearInitialDataCache();
+
+  const emailMsg = emailSent ? `\n(입력하신 ${email} 주소로 신청 확인 이메일이 발송되었습니다)` : "";
 
   return { 
     message: remark && String(remark).trim() !== "" 
-      ? "참관 신청이 완료되었으며, 참관 기대평이 나눔마당(게시판)에 자동 등록되었습니다." 
-      : "참관 신청이 정상적으로 완료되었습니다.", 
+      ? `참관 신청이 완료되었습니다.${emailMsg} 참관 기대평이 나눔마당에 자동 등록되었습니다.` 
+      : `참관 신청이 정상적으로 완료되었습니다.${emailMsg}`, 
     classTitle: targetClass.name,
-    applicantName: applicantName || "(미입력)"
+    applicantName: applicantName || "(미입력)",
+    emailSent: emailSent
   };
+}
+
+/**
+ * ✉️ 참관 신청 접수 완료 안내 이메일 발송 함수
+ */
+function sendApplicationConfirmationEmail(applicantName, school, targetClass, email, remark) {
+  if (!email || !email.trim() || !email.includes("@")) return false;
+
+  try {
+    const teacherName = applicantName ? `${applicantName} 선생님` : "선생님";
+    const emailSubject = `[삼현여자중학교] 2026 수업나눔한마당 참관 신청 접수 완료 (${teacherName})`;
+    const emailBodyHtml = `
+      <div style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 25px;">
+          <h2 style="color: #4f46e5; margin: 0 0 10px 0; font-size: 22px;">수업나눔한마당 참관 신청 접수 완료</h2>
+          <p style="color: #64748b; font-size: 14px; margin: 0;">삼현여자중학교 배움중심수업 나눔중심학교</p>
+        </div>
+        
+        <p style="font-size: 15px; line-height: 1.6; color: #334155;">
+          안녕하세요, <strong>${teacherName}</strong>.<br>
+          삼현여자중학교 <strong>2026 수업나눔한마당</strong> 참관 신청이 정상적으로 접수되었습니다.<br>
+          신청하신 수업의 세부 내용은 아래와 같습니다.
+        </p>
+        
+        <div style="background-color: #f8fafc; border-radius: 8px; padding: 18px; margin: 20px 0; border-left: 4px solid #4f46e5;">
+          <table style="width: 100%; font-size: 14px; color: #334155; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold; width: 100px;">신청자 성명:</td>
+              <td style="padding: 6px 0;">${teacherName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">소 속:</td>
+              <td style="padding: 6px 0;">${school || '삼현여자중학교 (교내)'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">참관 수업:</td>
+              <td style="padding: 6px 0; color: #4f46e5; font-weight: bold;">${targetClass.name}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">수업 일시:</td>
+              <td style="padding: 6px 0;">${targetClass.dateTime || '2026-9-11 15:00 ~ 16:30'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">수업 장소:</td>
+              <td style="padding: 6px 0;">${targetClass.location || '삼현여자중학교 지정 교실'}</td>
+            </tr>
+            ${remark ? `
+            <tr>
+              <td style="padding: 6px 0; font-weight: bold;">참관 기대평:</td>
+              <td style="padding: 6px 0;">${remark}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+        
+        <div style="background-color: #eef2ff; border-radius: 8px; padding: 14px; margin: 20px 0;">
+          <p style="font-size: 13px; color: #3730a3; margin: 0; line-height: 1.6;">
+            💡 <strong>참관 안내사항</strong><br>
+            • 신청 내역 확인 및 취소/수정은 사이트 상단의 <strong>[신청 내역 조회]</strong> 메뉴에서 신청 시 설정하신 비밀번호로 가능합니다.<br>
+            • 행사 당일 참석 확인(출석 체크)이 완료되면 본 메일 주소로 <strong>참관 확인서(PDF)</strong>가 자동으로 발송됩니다.
+          </p>
+        </div>
+        
+        <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 12px;">
+          삼현여자중학교 배움중심수업 나눔마당 운영팀
+        </div>
+      </div>
+    `;
+
+    MailApp.sendEmail({
+      to: email.trim(),
+      subject: emailSubject,
+      htmlBody: emailBodyHtml
+    });
+    return true;
+  } catch (mailErr) {
+    Logger.log("참관 신청 확인 메일 발송 실패: " + mailErr.toString());
+    return false;
+  }
 }
 
 /**

@@ -370,11 +370,14 @@ const API = {
         }
 
         saveMockStore(store);
+        const hasEmail = payload.email && payload.email.trim() !== "";
+        const emailNotice = hasEmail ? ` (신청 확인 이메일이 ${payload.email}로 발송되었습니다)` : "";
         return { 
           message: payload.remark && String(payload.remark).trim() !== "" 
-            ? "참관 신청 완료 및 참관 기대평이 나눔마당(게시판)에 자동 등록되었습니다." 
-            : "참관 신청이 성공적으로 접수되었습니다.", 
-          classTitle: target.topic 
+            ? `참관 신청 완료${emailNotice} 및 참관 기대평이 나눔마당(게시판)에 자동 등록되었습니다.` 
+            : `참관 신청이 정상적으로 완료되었습니다.${emailNotice}`, 
+          classTitle: `[${target.subject}] ${target.topic} (${target.teacher} 선생님)`,
+          applicantName: payload.applicantName
         };
       }
 
