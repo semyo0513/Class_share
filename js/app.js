@@ -399,7 +399,7 @@ function toggleTeacherTypeValidation() {
     if (schoolInput) {
       schoolInput.required = false;
       schoolInput.placeholder = teacherType === 'INTERNAL'
-        ? '소속 학교명 (선택 사항, 기본: 삼현여자고등학교)'
+        ? '소속 학교명 (선택 사항, 기본: 삼현여자중학교)'
         : '소속 학교명 입력 (선택 사항)';
     }
     if (schoolMark) schoolMark.classList.add('hidden');
