@@ -524,7 +524,7 @@ async function submitApplication(event) {
     password: pw,
     teacherType: teacherType,
     applicantName: name,
-    school: school || (teacherType === 'INTERNAL' ? '삼현여자고등학교' : ''),
+    school: school || (teacherType === 'INTERNAL' ? '삼현여자중학교' : ''),
     phone: phone,
     email: email,
     remark: document.getElementById("applyRemark").value.trim()
