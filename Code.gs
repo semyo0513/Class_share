@@ -24,6 +24,34 @@ const SHEETS = {
   CONFIG: "Config"
 };
 
+/**
+ * 🔑 [권한 승인용 1회 실행 함수]
+ * Apps Script 에디터 상단 함수 드롭다운에서 'authorizeAndTestPermissions'를 선택하고 [실행] 버튼을 누르면
+ * Google Docs, Gmail, Drive, Sheets 권한 승인 팝업이 즉시 뜨며 권한이 영구 부여됩니다.
+ */
+function authorizeAndTestPermissions() {
+  Logger.log("=== Google 서비스 권한 승인 및 점검 시작 ===");
+  
+  // 1. Spreadsheet 권한
+  const ss = getSpreadsheet();
+  Logger.log("✔ Spreadsheet 연결 성공: " + ss.getName());
+  
+  // 2. Drive 권한
+  const folder = getTargetDriveFolder();
+  Logger.log("✔ Drive 연결 성공: " + folder.getName());
+  
+  // 3. DocumentApp 권한 (참관 확인서 템플릿 접근)
+  const templateDoc = DocumentApp.openById(CERT_TEMPLATE_DOC_ID);
+  Logger.log("✔ Google Docs 템플릿 접근 성공: " + templateDoc.getName());
+  
+  // 4. MailApp 권한
+  const quota = MailApp.getRemainingDailyQuota();
+  Logger.log("✔ MailApp 일일 잔여 발송 가능량: " + quota + "건");
+  
+  Logger.log("🎉 모든 권한 승인이 정상적으로 완료되었습니다!");
+  return "모든 권한 승인 완료";
+}
+
 function getSpreadsheet() {
   let ss = SpreadsheetApp.getActiveSpreadsheet();
   if (ss) return ss;
